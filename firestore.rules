@@ -1,0 +1,235 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isIntRange(v, maxVal) {
+      return v is int && v >= 0 && v <= maxVal;
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 60 &&
+             isIntRange(data.pointsBalance, 50000000) &&
+             isIntRange(data.totalPointsEarned, 50000000) &&
+             isIntRange(data.totalDistanceMeters, 100000000) &&
+             isIntRange(data.totalRides, 100000) &&
+             (!('cyclingPointsEarned' in data) || isIntRange(data.cyclingPointsEarned, 50000000)) &&
+             (!('cyclingDistanceMeters' in data) || isIntRange(data.cyclingDistanceMeters, 100000000)) &&
+             (!('cyclingRides' in data) || isIntRange(data.cyclingRides, 100000)) &&
+             (!('runningPointsEarned' in data) || isIntRange(data.runningPointsEarned, 50000000)) &&
+             (!('runningDistanceMeters' in data) || isIntRange(data.runningDistanceMeters, 100000000)) &&
+             (!('runningRides' in data) || isIntRange(data.runningRides, 100000)) &&
+             data.unlockedCosmetics is list && data.unlockedCosmetics.size() >= 1 && data.unlockedCosmetics.size() <= 50 &&
+             data.unlockedCosmetics[0] is string &&
+             data.equippedBikeId is string && data.equippedBikeId.size() >= 1 && data.equippedBikeId.size() <= 50 &&
+             data.equippedHelmetId is string && data.equippedHelmetId.size() >= 1 && data.equippedHelmetId.size() <= 50 &&
+             data.equippedTrailId is string && data.equippedTrailId.size() >= 1 && data.equippedTrailId.size() <= 50 &&
+             data.equippedBadgeId is string && data.equippedBadgeId.size() >= 1 && data.equippedBadgeId.size() <= 50 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidSportSessionUpdate(i, e) {
+      let deltaDist = i.totalDistanceMeters - e.totalDistanceMeters;
+      let deltaPts = i.totalPointsEarned - e.totalPointsEarned;
+      let pCycPts = ('cyclingPointsEarned' in e) ? e.cyclingPointsEarned : 0;
+      let pCycDist = ('cyclingDistanceMeters' in e) ? e.cyclingDistanceMeters : 0;
+      let pCycRides = ('cyclingRides' in e) ? e.cyclingRides : 0;
+      let pRunPts = ('runningPointsEarned' in e) ? e.runningPointsEarned : 0;
+      let pRunDist = ('runningDistanceMeters' in e) ? e.runningDistanceMeters : 0;
+      let pRunRides = ('runningRides' in e) ? e.runningRides : 0;
+      let isCycling = i.cyclingRides == pCycRides + 1 &&
+                      i.runningRides == pRunRides &&
+                      i.runningPointsEarned == pRunPts &&
+                      i.runningDistanceMeters == pRunDist &&
+                      (i.cyclingDistanceMeters - pCycDist) == deltaDist &&
+                      (i.cyclingPointsEarned - pCycPts) == deltaPts &&
+                      deltaPts <= (deltaDist / 100) + 1;
+      let isRunning = i.runningRides == pRunRides + 1 &&
+                      i.cyclingRides == pCycRides &&
+                      i.cyclingPointsEarned == pCycPts &&
+                      i.cyclingDistanceMeters == pCycDist &&
+                      (i.runningDistanceMeters - pRunDist) == deltaDist &&
+                      (i.runningPointsEarned - pRunPts) == deltaPts &&
+                      deltaPts <= ((deltaDist * 25) / 100) + 25;
+      return i.diff(e).affectedKeys().hasOnly([
+               'pointsBalance', 'totalPointsEarned', 'totalDistanceMeters', 'totalRides',
+               'cyclingPointsEarned', 'cyclingDistanceMeters', 'cyclingRides',
+               'runningPointsEarned', 'runningDistanceMeters', 'runningRides',
+               'updatedAt'
+             ]) &&
+             deltaDist > 0 &&
+             i.totalRides == e.totalRides + 1 &&
+             deltaPts >= 0 &&
+             (i.pointsBalance - e.pointsBalance) == deltaPts &&
+             (isCycling || isRunning);
+    }
+
+    function isValidRide(data) {
+      let sport = ('sportType' in data) ? data.sportType : 'cycling';
+      return data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             sport in ['cycling', 'running'] &&
+             data.distanceMeters is int && data.distanceMeters > 0 && data.distanceMeters <= 1000000 &&
+             isIntRange(data.durationSeconds, 86400) &&
+             isIntRange(data.pointsEarned, 250000) &&
+             (data.avgSpeedKmh is int || data.avgSpeedKmh is float) && data.avgSpeedKmh >= 0 && data.avgSpeedKmh <= 150 &&
+             data.trailCosmeticId is string && data.trailCosmeticId.size() >= 1 && data.trailCosmeticId.size() <= 50 &&
+             data.startLabel is string && data.startLabel.size() >= 1 && data.startLabel.size() <= 100 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidLeaderboardEntry(data) {
+      return data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 60 &&
+             isIntRange(data.totalPointsEarned, 50000000) &&
+             isIntRange(data.totalDistanceMeters, 100000000) &&
+             isIntRange(data.totalRides, 100000) &&
+             isIntRange(data.cyclingPointsEarned, 50000000) &&
+             isIntRange(data.cyclingDistanceMeters, 100000000) &&
+             isIntRange(data.cyclingRides, 100000) &&
+             isIntRange(data.runningPointsEarned, 50000000) &&
+             isIntRange(data.runningDistanceMeters, 100000000) &&
+             isIntRange(data.runningRides, 100000) &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function matchesUserDocument(lb, userId) {
+      let u = getAfter(/databases/$(database)/documents/users/$(userId)).data;
+      return u.totalPointsEarned == lb.totalPointsEarned &&
+             u.totalDistanceMeters == lb.totalDistanceMeters &&
+             u.totalRides == lb.totalRides &&
+             u.cyclingPointsEarned == lb.cyclingPointsEarned &&
+             u.cyclingDistanceMeters == lb.cyclingDistanceMeters &&
+             u.cyclingRides == lb.cyclingRides &&
+             u.runningPointsEarned == lb.runningPointsEarned &&
+             u.runningDistanceMeters == lb.runningDistanceMeters &&
+             u.runningRides == lb.runningRides &&
+             u.displayName == lb.displayName;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if false;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'userId', 'displayName', 'pointsBalance', 'totalPointsEarned',
+                         'totalDistanceMeters', 'totalRides',
+                         'cyclingPointsEarned', 'cyclingDistanceMeters', 'cyclingRides',
+                         'runningPointsEarned', 'runningDistanceMeters', 'runningRides',
+                         'unlockedCosmetics', 'equippedBikeId', 'equippedHelmetId',
+                         'equippedTrailId', 'equippedBadgeId', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'displayName', 'pointsBalance', 'totalPointsEarned',
+                         'totalDistanceMeters', 'totalRides',
+                         'cyclingPointsEarned', 'cyclingDistanceMeters', 'cyclingRides',
+                         'runningPointsEarned', 'runningDistanceMeters', 'runningRides',
+                         'unlockedCosmetics', 'equippedBikeId', 'equippedHelmetId',
+                         'equippedTrailId', 'equippedBadgeId', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().pointsBalance == 0 &&
+                       incoming().totalPointsEarned == 0 &&
+                       incoming().totalDistanceMeters == 0 &&
+                       incoming().totalRides == 0 &&
+                       incoming().cyclingPointsEarned == 0 &&
+                       incoming().cyclingDistanceMeters == 0 &&
+                       incoming().cyclingRides == 0 &&
+                       incoming().runningPointsEarned == 0 &&
+                       incoming().runningDistanceMeters == 0 &&
+                       incoming().runningRides == 0 &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt && (
+                         isValidSportSessionUpdate(incoming(), existing()) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt'])
+                       );
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+
+      match /rides/{rideId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(rideId) && request.auth.uid == userId;
+        allow list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         isValidId(userId) &&
+                         isValidId(rideId) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll([
+                           'userId', 'sportType', 'distanceMeters', 'durationSeconds', 'pointsEarned',
+                           'avgSpeedKmh', 'trailCosmeticId', 'startLabel', 'createdAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'sportType', 'distanceMeters', 'durationSeconds', 'pointsEarned',
+                           'avgSpeedKmh', 'trailCosmeticId', 'startLabel', 'createdAt'
+                         ]) &&
+                         (
+                           (incoming().sportType == 'cycling' && incoming().pointsEarned <= (incoming().distanceMeters / 100) + 1) ||
+                           (incoming().sportType == 'running' && incoming().pointsEarned <= ((incoming().distanceMeters * 25) / 100) + 25)
+                         ) &&
+                         isValidRide(incoming());
+
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(rideId) && request.auth.uid == userId;
+      }
+    }
+
+    // Public non-PII leaderboard collection synced strictly from /users/{userId}
+    match /leaderboard/{userId} {
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if isSignedIn() && request.query.limit <= 50;
+
+      allow create, update: if isSignedIn() &&
+                               isValidId(userId) &&
+                               request.auth.uid == userId &&
+                               incoming().userId == request.auth.uid &&
+                               incoming().keys().hasAll([
+                                 'userId', 'displayName', 'totalPointsEarned',
+                                 'totalDistanceMeters', 'totalRides',
+                                 'cyclingPointsEarned', 'cyclingDistanceMeters', 'cyclingRides',
+                                 'runningPointsEarned', 'runningDistanceMeters', 'runningRides',
+                                 'updatedAt'
+                               ]) &&
+                               incoming().keys().hasOnly([
+                                 'userId', 'displayName', 'totalPointsEarned',
+                                 'totalDistanceMeters', 'totalRides',
+                                 'cyclingPointsEarned', 'cyclingDistanceMeters', 'cyclingRides',
+                                 'runningPointsEarned', 'runningDistanceMeters', 'runningRides',
+                                 'updatedAt'
+                               ]) &&
+                               isValidLeaderboardEntry(incoming()) &&
+                               matchesUserDocument(incoming(), userId);
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+    }
+  }
+}

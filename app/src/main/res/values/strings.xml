@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">GoCycleMaps</string>
+    <string name="auth_headline">Transformez chaque kilomètre et foulée en récompense</string>
+    <string name="auth_subtitle">Vélo : 10 pts / km • Course à pied : 25 pts / 100 m. Suivez vos sorties sur OpenStreetMap et grimpez dans les classements.</string>
+    <string name="auth_sign_in_google">Continuer avec Google</string>
+    <string name="nav_ride">Sport</string>
+    <string name="nav_leaderboard">Classement</string>
+    <string name="nav_profile">Profil</string>
+    <string name="nav_settings">Réglages</string>
+    <string name="ride_start">Démarrer la balade</string>
+    <string name="run_start">Démarrer la course</string>
+    <string name="ride_pause">Pause</string>
+    <string name="ride_resume">Reprendre</string>
+    <string name="ride_finish">Terminer</string>
+    <string name="ride_permission_title">Localisation requise pour mesurer votre parcours</string>
+    <string name="ride_permission_desc">GoCycleMaps utilise le GPS pour tracer votre parcours sur OpenStreetMap et créditer vos points (Vélo : 10 pts/km, Course : 25 pts/100m).</string>
+    <string name="ride_permission_cta">Autoriser le GPS</string>
+    <string name="leaderboard_title">Tableau des scores</string>
+    <string name="profile_title">Profil Sportif</string>
+    <string name="profile_edit_pseudo">Modifier le pseudo</string>
+    <string name="profile_sign_out">Se déconnecter</string>
+    <string name="settings_title">Paramètres &amp; Mises à jour</string>
+</resources>

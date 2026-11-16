@@ -1,0 +1,249 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Profil sportif privé, solde de points (Vélo 10 pts/km, Course 25 pts/100m) et statistiques par sport.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Identifiant Firebase Auth de l'utilisateur"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Pseudo affiché du sportif"
+        },
+        "pointsBalance": {
+          "type": "integer",
+          "description": "Total des points gagnés"
+        },
+        "totalPointsEarned": {
+          "type": "integer",
+          "description": "Total cumulé de points gagnés tous sports confondus"
+        },
+        "totalDistanceMeters": {
+          "type": "integer",
+          "description": "Distance totale parcourue en mètres tous sports confondus"
+        },
+        "totalRides": {
+          "type": "integer",
+          "description": "Nombre total de sorties enregistrées tous sports confondus"
+        },
+        "cyclingPointsEarned": {
+          "type": "integer",
+          "description": "Points cumulés à vélo (10 pts/km)"
+        },
+        "cyclingDistanceMeters": {
+          "type": "integer",
+          "description": "Distance totale parcourue à vélo en mètres"
+        },
+        "cyclingRides": {
+          "type": "integer",
+          "description": "Nombre de balades à vélo"
+        },
+        "runningPointsEarned": {
+          "type": "integer",
+          "description": "Points cumulés en course à pied (25 pts/100m)"
+        },
+        "runningDistanceMeters": {
+          "type": "integer",
+          "description": "Distance totale parcourue en course à pied en mètres"
+        },
+        "runningRides": {
+          "type": "integer",
+          "description": "Nombre de courses à pied"
+        },
+        "unlockedCosmetics": {
+          "type": "array",
+          "description": "Liste de compatibilité des styles"
+        },
+        "equippedBikeId": {
+          "type": "string",
+          "description": "Style vélo actif"
+        },
+        "equippedHelmetId": {
+          "type": "string",
+          "description": "Style casque actif"
+        },
+        "equippedTrailId": {
+          "type": "string",
+          "description": "Style tracé de carte actif"
+        },
+        "equippedBadgeId": {
+          "type": "string",
+          "description": "Badge actif"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Horodatage serveur de création (FieldValue.serverTimestamp())"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Horodatage serveur de mise à jour (FieldValue.serverTimestamp())"
+        }
+      },
+      "required": [
+        "userId",
+        "displayName",
+        "pointsBalance",
+        "totalPointsEarned",
+        "totalDistanceMeters",
+        "totalRides",
+        "cyclingPointsEarned",
+        "cyclingDistanceMeters",
+        "cyclingRides",
+        "runningPointsEarned",
+        "runningDistanceMeters",
+        "runningRides",
+        "unlockedCosmetics",
+        "equippedBikeId",
+        "equippedHelmetId",
+        "equippedTrailId",
+        "equippedBadgeId",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "BikeRide": {
+      "title": "BikeRide",
+      "description": "Enregistrement d'une sortie sportive (vélo ou course à pied) avec distance, durée et points gagnés.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Identifiant Firebase Auth du propriétaire"
+        },
+        "sportType": {
+          "type": "string",
+          "description": "Sport pratiqué : cycling ou running"
+        },
+        "distanceMeters": {
+          "type": "integer",
+          "description": "Distance parcourue en mètres"
+        },
+        "durationSeconds": {
+          "type": "integer",
+          "description": "Durée de la sortie en secondes"
+        },
+        "pointsEarned": {
+          "type": "integer",
+          "description": "Points gagnés (Vélo : 10 pts/km, Course : 25 pts/100m)"
+        },
+        "avgSpeedKmh": {
+          "type": "number",
+          "description": "Vitesse moyenne en km/h"
+        },
+        "trailCosmeticId": {
+          "type": "string",
+          "description": "Couleur du tracé utilisé lors de la sortie"
+        },
+        "startLabel": {
+          "type": "string",
+          "description": "Libellé de la sortie"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Horodatage serveur (FieldValue.serverTimestamp())"
+        }
+      },
+      "required": [
+        "userId",
+        "sportType",
+        "distanceMeters",
+        "durationSeconds",
+        "pointsEarned",
+        "avgSpeedKmh",
+        "trailCosmeticId",
+        "startLabel",
+        "createdAt"
+      ]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Entrée publique du tableau des scores multi-sports (sans PII).",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Identifiant Firebase Auth du sportif"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Pseudo public du sportif"
+        },
+        "totalPointsEarned": {
+          "type": "integer",
+          "description": "Score total en points tous sports"
+        },
+        "totalDistanceMeters": {
+          "type": "integer",
+          "description": "Distance totale parcourue en mètres tous sports"
+        },
+        "totalRides": {
+          "type": "integer",
+          "description": "Nombre total de sorties"
+        },
+        "cyclingPointsEarned": {
+          "type": "integer",
+          "description": "Points cumulés en catégorie Vélo"
+        },
+        "cyclingDistanceMeters": {
+          "type": "integer",
+          "description": "Distance totale à vélo en mètres"
+        },
+        "cyclingRides": {
+          "type": "integer",
+          "description": "Nombre de sorties à vélo"
+        },
+        "runningPointsEarned": {
+          "type": "integer",
+          "description": "Points cumulés en catégorie Course à pied"
+        },
+        "runningDistanceMeters": {
+          "type": "integer",
+          "description": "Distance totale en course à pied en mètres"
+        },
+        "runningRides": {
+          "type": "integer",
+          "description": "Nombre de courses à pied"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Dernière mise à jour serveur"
+        }
+      },
+      "required": [
+        "userId",
+        "displayName",
+        "totalPointsEarned",
+        "totalDistanceMeters",
+        "totalRides",
+        "cyclingPointsEarned",
+        "cyclingDistanceMeters",
+        "cyclingRides",
+        "runningPointsEarned",
+        "runningDistanceMeters",
+        "runningRides",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Profil et statistiques privées de l'utilisateur"
+    },
+    "/users/{userId}/rides/{rideId}": {
+      "schema": { "$ref": "#/entities/BikeRide" },
+      "description": "Historique des sorties sportives (vélo et course à pied)"
+    },
+    "/leaderboard/{userId}": {
+      "schema": { "$ref": "#/entities/LeaderboardEntry" },
+      "description": "Tableau des scores des meilleurs sportifs par catégorie"
+    }
+  }
+}

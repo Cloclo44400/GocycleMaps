@@ -1,0 +1,6 @@
+{
+  "name": "GoCycleMaps",
+  "description": "Application multisport sur OpenStreetMap : Vélo (10 pts/km) et Course à pied (25 pts/100m), classements par sport et mises à jour GitHub.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
