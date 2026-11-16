@@ -31,7 +31,7 @@ data class UpdateSettings(
         get() = parseOwnerRepo(githubRepoSlug) != null
 
     companion object {
-        const val DEFAULT_GITHUB_REPO = "cloclousa/GoCycleMaps"
+        const val DEFAULT_GITHUB_REPO = "cloclo44400/GoCycleMaps"
 
         fun parseOwnerRepo(raw: String): Pair<String, String>? {
             val cleaned = raw.trim()
@@ -95,15 +95,24 @@ class UpdatePreferences(context: Context) {
     private val _settings = MutableStateFlow(readSettings())
     val settings: StateFlow<UpdateSettings> = _settings.asStateFlow()
 
-    private fun readSettings(): UpdateSettings = UpdateSettings(
-        githubRepoSlug = prefs.getString(KEY_REPO_SLUG, UpdateSettings.DEFAULT_GITHUB_REPO)
-            ?: UpdateSettings.DEFAULT_GITHUB_REPO,
-        autoCheckEnabled = prefs.getBoolean(KEY_AUTO_CHECK, true),
-        notificationsEnabled = prefs.getBoolean(KEY_NOTIFICATIONS, true),
-        includePreReleases = prefs.getBoolean(KEY_PRE_RELEASES, false),
-        lastCheckedAtMillis = prefs.getLong(KEY_LAST_CHECKED, 0L),
-        lastNotifiedTag = prefs.getString(KEY_LAST_NOTIFIED_TAG, null),
-    )
+    private fun readSettings(): UpdateSettings {
+        val storedRepo = prefs.getString(KEY_REPO_SLUG, UpdateSettings.DEFAULT_GITHUB_REPO)
+            ?: UpdateSettings.DEFAULT_GITHUB_REPO
+        val resolvedRepo = if (storedRepo == "cloclousa/GoCycleMaps") {
+            prefs.edit { putString(KEY_REPO_SLUG, UpdateSettings.DEFAULT_GITHUB_REPO) }
+            UpdateSettings.DEFAULT_GITHUB_REPO
+        } else {
+            storedRepo
+        }
+        return UpdateSettings(
+            githubRepoSlug = resolvedRepo,
+            autoCheckEnabled = prefs.getBoolean(KEY_AUTO_CHECK, true),
+            notificationsEnabled = prefs.getBoolean(KEY_NOTIFICATIONS, true),
+            includePreReleases = prefs.getBoolean(KEY_PRE_RELEASES, false),
+            lastCheckedAtMillis = prefs.getLong(KEY_LAST_CHECKED, 0L),
+            lastNotifiedTag = prefs.getString(KEY_LAST_NOTIFIED_TAG, null),
+        )
+    }
 
     fun saveSettings(
         githubRepoSlug: String = _settings.value.githubRepoSlug,

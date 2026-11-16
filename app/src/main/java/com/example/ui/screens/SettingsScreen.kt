@@ -171,7 +171,7 @@ fun SettingsScreen(
                             onValueChange = { repoInput = it },
                             singleLine = true,
                             label = { Text("Dépôt GitHub (proprietaire/depot)") },
-                            placeholder = { Text("cloclousa/GoCycleMaps") },
+                            placeholder = { Text("cloclo44400/GoCycleMaps") },
                             isError = repoInput.isNotEmpty() && !isRepoValid,
                             supportingText = {
                                 Text(

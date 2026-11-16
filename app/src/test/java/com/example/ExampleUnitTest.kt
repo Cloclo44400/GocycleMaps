@@ -44,8 +44,9 @@ class ExampleUnitTest {
 
     @Test
     fun updateSettings_parsesOwnerRepoFormats() {
-        assertEquals("alice" to "GoCycleMaps", UpdateSettings.parseOwnerRepo("alice/GoCycleMaps"))
-        assertEquals("alice" to "GoCycleMaps", UpdateSettings.parseOwnerRepo("https://github.com/alice/GoCycleMaps/"))
+        assertEquals("cloclo44400/GoCycleMaps", UpdateSettings().githubRepoSlug)
+        assertEquals("cloclo44400" to "GoCycleMaps", UpdateSettings.parseOwnerRepo("cloclo44400/GoCycleMaps"))
+        assertEquals("cloclo44400" to "GoCycleMaps", UpdateSettings.parseOwnerRepo("https://github.com/cloclo44400/GoCycleMaps/"))
         assertNull(UpdateSettings.parseOwnerRepo("invalid-repo"))
         assertNotNull(CosmeticCatalog.findById("bike_mint"))
     }
