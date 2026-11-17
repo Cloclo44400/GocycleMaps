@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.graphics.Paint
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,8 +38,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -64,6 +63,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -262,6 +262,7 @@ fun RideScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Row(
+                            modifier = Modifier.weight(1f),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
@@ -278,21 +279,26 @@ fun RideScreen(
                                         .size(20.dp),
                                 )
                             }
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = profile?.displayName ?: "Sportif",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
                                     text = "${activeSport.labelFr} • ${activeSport.rewardRuleShort}",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = sportAccentColor,
                                     fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
 
+                        Spacer(Modifier.width(8.dp))
                         PointsPill(points = profile?.totalPointsEarned ?: 0L)
                     }
 
@@ -308,36 +314,73 @@ fun RideScreen(
                                 } else {
                                     Icons.AutoMirrored.Rounded.DirectionsBike
                                 }
-                                FilterChip(
+                                val selectedColor = if (sport == SportType.RUNNING) {
+                                    Color(0xFFE65100)
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                }
+                                Surface(
                                     selected = selected,
                                     onClick = { onSelectSport(sport) },
-                                    label = {
-                                        Text(
-                                            text = "${sport.labelFr} (${if (sport == SportType.RUNNING) "25 pts/100m" else "10 pts/km"})",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                        )
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (selected) {
+                                        selectedColor
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
                                     },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = chipIcon,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                        )
+                                    border = if (selected) {
+                                        null
+                                    } else {
+                                        BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                                     },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = if (sport == SportType.RUNNING) {
-                                            Color(0xFFE65100)
-                                        } else {
-                                            MaterialTheme.colorScheme.primary
-                                        },
-                                        selectedLabelColor = Color.White,
-                                        selectedLeadingIconColor = Color.White,
-                                    ),
                                     modifier = Modifier
                                         .weight(1f)
+                                        .heightIn(min = 52.dp)
                                         .testTag("sport_selector_${sport.id}"),
-                                )
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center,
+                                        ) {
+                                            Icon(
+                                                imageVector = chipIcon,
+                                                contentDescription = null,
+                                                tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                            Spacer(Modifier.width(5.dp))
+                                            Text(
+                                                text = sport.labelFr,
+                                                style = MaterialTheme.typography.labelLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                                maxLines = 1,
+                                                softWrap = false,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(
+                                            text = if (sport == SportType.RUNNING) "25 pts / 100 m" else "10 pts / km",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (selected) {
+                                                Color.White.copy(alpha = 0.9f)
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

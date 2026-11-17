@@ -10,7 +10,7 @@ import com.example.data.model.LeaderboardCategory
 import com.example.data.model.LeaderboardEntry
 import com.example.data.model.SportType
 import com.example.data.model.UserProfile
-import com.example.data.repository.CyclingRepository
+import com.example.data.repository.SportDataRepository
 import com.example.location.RideLocationTracker
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
@@ -76,7 +76,7 @@ data class RideSessionState(
 }
 
 class VeloQuestViewModel(
-    private val repository: CyclingRepository,
+    private val repository: SportDataRepository,
     private val locationTracker: RideLocationTracker,
     private val currentUserId: String,
     initialDisplayName: String,

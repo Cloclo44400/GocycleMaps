@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -159,7 +161,9 @@ private fun CategoryFilterRow(
     onSelectCategory: (LeaderboardCategory) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         LeaderboardCategory.entries.forEach { category ->
@@ -177,7 +181,7 @@ private fun CategoryFilterRow(
                         text = category.labelFr,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false,
                     )
                 },
                 leadingIcon = {
@@ -192,9 +196,7 @@ private fun CategoryFilterRow(
                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
                     selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
                 ),
-                modifier = Modifier
-                    .weight(1f)
-                    .testTag("leaderboard_tab_${category.name}"),
+                modifier = Modifier.testTag("leaderboard_tab_${category.name}"),
             )
         }
     }

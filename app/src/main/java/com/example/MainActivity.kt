@@ -41,6 +41,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +65,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.auth.signOutUser
 import com.example.data.model.UserProfile
 import com.example.data.repository.CyclingRepository
+import com.example.data.repository.LocalGuestRepository
 import com.example.location.RideLocationTracker
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.LeaderboardScreen
@@ -171,14 +173,23 @@ fun AppNavigation(
 ) {
     val currentUser by auth.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
     val user = currentUser
+    var isGuestBypassActive by rememberSaveable { mutableStateOf(false) }
 
-    if (user == null) {
-        AuthScreen(onAuthSuccess = {})
+    if (user == null && !isGuestBypassActive) {
+        AuthScreen(
+            onAuthSuccess = { isGuestBypassActive = false },
+            onBypassSignIn = { isGuestBypassActive = true },
+        )
     } else {
-        key(user.uid) {
+        val isGuestMode = user == null
+        val activeUserId = user?.uid ?: LocalGuestRepository.GUEST_USER_ID
+        val activeDisplayName = user?.displayName ?: "Invité"
+        key(activeUserId) {
             MainFeatureScreen(
-                currentUserId = user.uid,
-                initialDisplayName = user.displayName ?: "Sportif",
+                currentUserId = activeUserId,
+                initialDisplayName = activeDisplayName,
+                isGuestMode = isGuestMode,
+                onExitGuestMode = { isGuestBypassActive = false },
                 openUpdatesFromNotification = openUpdatesFromNotification,
                 onConsumedOpenUpdates = onConsumedOpenUpdates,
             )
@@ -190,6 +201,8 @@ fun AppNavigation(
 fun MainFeatureScreen(
     currentUserId: String,
     initialDisplayName: String,
+    isGuestMode: Boolean = false,
+    onExitGuestMode: () -> Unit = {},
     openUpdatesFromNotification: Boolean = false,
     onConsumedOpenUpdates: () -> Unit = {},
 ) {
@@ -198,16 +211,21 @@ fun MainFeatureScreen(
     val credentialManager = remember(context) { CredentialManager.create(context) }
 
     val viewModel: VeloQuestViewModel = viewModel(
-        key = currentUserId,
+        key = "${currentUserId}_$isGuestMode",
         factory = viewModelFactory {
             initializer {
                 val app = checkNotNull(this[APPLICATION_KEY]) {
                     "APPLICATION_KEY missing from CreationExtras"
                 }
-                val databaseId = app.getString(R.string.firestore_database_id)
-                val db = FirebaseFirestore.getInstance(databaseId)
+                val repository = if (isGuestMode) {
+                    LocalGuestRepository(app)
+                } else {
+                    val databaseId = app.getString(R.string.firestore_database_id)
+                    val db = FirebaseFirestore.getInstance(databaseId)
+                    CyclingRepository(db, Firebase.auth)
+                }
                 VeloQuestViewModel(
-                    repository = CyclingRepository(db, Firebase.auth),
+                    repository = repository,
                     locationTracker = RideLocationTracker(app),
                     currentUserId = currentUserId,
                     initialDisplayName = initialDisplayName,
@@ -377,10 +395,14 @@ fun MainFeatureScreen(
                                 onUpdateDisplayName = viewModel::updateDisplayName,
                                 onDeleteRide = viewModel::deleteRide,
                                 onSignOut = {
-                                    signOutUser(
-                                        credentialManager = credentialManager,
-                                        scope = scope,
-                                    )
+                                    if (isGuestMode) {
+                                        onExitGuestMode()
+                                    } else {
+                                        signOutUser(
+                                            credentialManager = credentialManager,
+                                            scope = scope,
+                                        )
+                                    }
                                 },
                                 modifier = Modifier.padding(top = 8.dp),
                             )

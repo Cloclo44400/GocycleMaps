@@ -2,6 +2,8 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +39,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -62,6 +66,7 @@ import com.example.auth.onGoogleSignInClicked
 @Composable
 fun AuthScreen(
     onAuthSuccess: () -> Unit,
+    onBypassSignIn: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -70,6 +75,8 @@ fun AuthScreen(
 
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var appNameTapCount by remember { mutableIntStateOf(0) }
+    var lastAppNameTapAt by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(Unit) {
         attemptAutoSignIn(
@@ -122,11 +129,27 @@ fun AuthScreen(
                                 .size(24.dp),
                         )
                     }
+                    val tapInteractionSource = remember { MutableInteractionSource() }
                     Text(
                         text = stringResource(R.string.app_name),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier
+                            .clickable(
+                                interactionSource = tapInteractionSource,
+                                indication = null,
+                            ) {
+                                val now = System.currentTimeMillis()
+                                appNameTapCount = if (now - lastAppNameTapAt > 4000L) 1 else appNameTapCount + 1
+                                lastAppNameTapAt = now
+                                if (appNameTapCount >= 5) {
+                                    appNameTapCount = 0
+                                    onBypassSignIn()
+                                }
+                            }
+                            .padding(vertical = 8.dp, horizontal = 4.dp)
+                            .testTag("app_name_bypass_trigger"),
                     )
                 }
 

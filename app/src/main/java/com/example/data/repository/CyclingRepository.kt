@@ -30,7 +30,7 @@ import java.util.UUID
 class CyclingRepository(
     private val db: FirebaseFirestore,
     private val auth: FirebaseAuth = Firebase.auth,
-) {
+) : SportDataRepository {
     constructor(context: Context) : this(
         db = FirebaseFirestore.getInstance(
             context.applicationContext.getString(R.string.firestore_database_id)
@@ -42,7 +42,7 @@ class CyclingRepository(
         auth.currentUser?.uid
             ?: throw IllegalStateException("L'utilisateur doit être connecté avec Google pour accéder à Firestore.")
 
-    suspend fun ensureUserProfile(displayNameFallback: String = "Sportif"): UserProfile {
+    override suspend fun ensureUserProfile(displayNameFallback: String): UserProfile {
         val uid = requireUserId()
         val userRef = db.collection("users").document(uid)
         val leaderboardRef = db.collection("leaderboard").document(uid)
@@ -128,7 +128,7 @@ class CyclingRepository(
         }
     }
 
-    fun observeUserProfile(userId: String): Flow<UserProfile?> = flow {
+    override fun observeUserProfile(userId: String): Flow<UserProfile?> = flow {
         val docRef = db.collection("users").document(userId)
         emitAll(
             docRef.snapshots()
@@ -156,7 +156,7 @@ class CyclingRepository(
         )
     }
 
-    fun observeRides(userId: String): Flow<List<BikeRide>> = flow {
+    override fun observeRides(userId: String): Flow<List<BikeRide>> = flow {
         val colRef = db.collection("users").document(userId).collection("rides")
         emitAll(
             colRef.orderBy("createdAt", Query.Direction.DESCENDING)
@@ -181,9 +181,9 @@ class CyclingRepository(
         )
     }
 
-    fun observeLeaderboard(
-        category: LeaderboardCategory = LeaderboardCategory.ALL,
-        limit: Long = 50L,
+    override fun observeLeaderboard(
+        category: LeaderboardCategory,
+        limit: Long,
     ): Flow<List<LeaderboardEntry>> = flow {
         val query = db.collection("leaderboard")
             .orderBy(category.orderByField, Query.Direction.DESCENDING)
@@ -219,13 +219,13 @@ class CyclingRepository(
         )
     }
 
-    suspend fun recordCompletedRide(
+    override suspend fun recordCompletedRide(
         distanceMeters: Long,
         durationSeconds: Long,
         avgSpeedKmh: Double,
         trailCosmeticId: String,
-        startLabel: String = "Balade à vélo",
-        sportType: SportType = SportType.CYCLING,
+        startLabel: String,
+        sportType: SportType,
     ): Long {
         val uid = requireUserId()
         require(distanceMeters > 0L) { "La distance doit être supérieure à 0 m." }
@@ -323,7 +323,7 @@ class CyclingRepository(
         }
     }
 
-    suspend fun updateDisplayName(newDisplayName: String) {
+    override suspend fun updateDisplayName(newDisplayName: String) {
         val uid = requireUserId()
         val cleanName = newDisplayName.trim()
         require(cleanName.length in 2..30) {
@@ -379,7 +379,7 @@ class CyclingRepository(
         }
     }
 
-    suspend fun deleteRide(rideId: String) {
+    override suspend fun deleteRide(rideId: String) {
         val uid = requireUserId()
         val rideRef = db.collection("users").document(uid).collection("rides").document(rideId)
         try {
