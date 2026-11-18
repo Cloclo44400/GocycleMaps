@@ -3,6 +3,7 @@ package com.example.data.repository
 import com.example.base.FirestoreEmulatorTestBase
 import com.example.data.model.CosmeticDefaults
 import com.example.data.model.LeaderboardCategory
+import com.example.data.model.RoutePointDto
 import com.example.data.model.SportType
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.flow.first
@@ -183,6 +184,50 @@ class CyclingRepositoryRuleTest : FirestoreEmulatorTestBase() {
                 "Expected FirebaseFirestoreException, got $e"
             }
             assertEquals(FirebaseFirestoreException.Code.PERMISSION_DENIED, fsException.code)
+        }
+    }
+
+    @Test
+    fun plannedRoutes_createObserveDelete_enforcesOwnerIsolation() = runBlocking {
+        val uniqueSuffix = UUID.randomUUID().toString().take(8)
+        val aliceUid = signInTestUser("routes_alice_$uniqueSuffix@test.com")
+        val aliceRepo = CyclingRepository(firestore, auth)
+
+        val routeId = withTimeout(DEFAULT_TIMEOUT_MS) {
+            aliceRepo.savePlannedRoute(
+                name = "Boucle Centre",
+                sportType = SportType.CYCLING,
+                distanceMeters = 3500L,
+                waypoints = listOf(
+                    RoutePointDto(47.21, -1.55),
+                    RoutePointDto(47.22, -1.54),
+                    RoutePointDto(47.21, -1.55),
+                ),
+            )
+        }
+
+        val routes = withTimeout(FLOW_TIMEOUT_MS) {
+            aliceRepo.observePlannedRoutes(aliceUid).first { it.any { r -> r.id == routeId } }
+        }
+        assertEquals("Boucle Centre", routes.first { it.id == routeId }.name)
+
+        signInTestUser("routes_bob_$uniqueSuffix@test.com")
+        val bobRepo = CyclingRepository(firestore, auth)
+        try {
+            withTimeout(FLOW_TIMEOUT_MS) {
+                bobRepo.observePlannedRoutes(aliceUid).first()
+            }
+            fail("Expected PERMISSION_DENIED when Bob reads Alice's planned routes")
+        } catch (e: Exception) {
+            val fsException = checkNotNull(e.unwrapFirestoreException()) {
+                "Expected FirebaseFirestoreException, got $e"
+            }
+            assertEquals(FirebaseFirestoreException.Code.PERMISSION_DENIED, fsException.code)
+        }
+
+        signInTestUser("routes_alice_$uniqueSuffix@test.com")
+        withTimeout(DEFAULT_TIMEOUT_MS) {
+            aliceRepo.deletePlannedRoute(routeId)
         }
     }
 

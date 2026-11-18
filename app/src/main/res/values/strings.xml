@@ -4,6 +4,7 @@
     <string name="auth_subtitle">Vélo : 10 pts / km • Course à pied : 25 pts / 100 m. Suivez vos sorties sur OpenStreetMap et grimpez dans les classements.</string>
     <string name="auth_sign_in_google">Continuer avec Google</string>
     <string name="nav_ride">Sport</string>
+    <string name="nav_editor">Éditeur</string>
     <string name="nav_leaderboard">Classement</string>
     <string name="nav_profile">Profil</string>
     <string name="nav_settings">Réglages</string>

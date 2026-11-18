@@ -230,6 +230,56 @@
         "runningRides",
         "updatedAt"
       ]
+    },
+    "PlannedRoute": {
+      "title": "PlannedRoute",
+      "description": "Trajet conçu sur la carte OpenStreetMap dans l'éditeur (vélo ou course à pied).",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Identifiant Firebase Auth du créateur"
+        },
+        "name": {
+          "type": "string",
+          "description": "Nom personnalisé du trajet"
+        },
+        "sportType": {
+          "type": "string",
+          "description": "Sport prévu : cycling ou running"
+        },
+        "distanceMeters": {
+          "type": "integer",
+          "description": "Distance totale estimée en mètres"
+        },
+        "estimatedPoints": {
+          "type": "integer",
+          "description": "Points estimés selon le sport"
+        },
+        "waypointCount": {
+          "type": "integer",
+          "description": "Nombre de points placés sur la carte"
+        },
+        "waypointsJson": {
+          "type": "string",
+          "description": "Liste JSON compacte des coordonnées [[lat,lon],...]"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Horodatage serveur (FieldValue.serverTimestamp())"
+        }
+      },
+      "required": [
+        "userId",
+        "name",
+        "sportType",
+        "distanceMeters",
+        "estimatedPoints",
+        "waypointCount",
+        "waypointsJson",
+        "createdAt"
+      ]
     }
   },
   "firestore": {
@@ -240,6 +290,10 @@
     "/users/{userId}/rides/{rideId}": {
       "schema": { "$ref": "#/entities/BikeRide" },
       "description": "Historique des sorties sportives (vélo et course à pied)"
+    },
+    "/users/{userId}/routes/{routeId}": {
+      "schema": { "$ref": "#/entities/PlannedRoute" },
+      "description": "Trajets conçus dans l'éditeur de carte"
     },
     "/leaderboard/{userId}": {
       "schema": { "$ref": "#/entities/LeaderboardEntry" },

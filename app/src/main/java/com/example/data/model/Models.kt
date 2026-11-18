@@ -4,6 +4,11 @@ import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.ServerTimestamp
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.roundToLong
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 enum class SportType(
     val id: String,
@@ -161,5 +166,70 @@ object CyclingPointsCalculator {
     fun progressTowardNextReward(distanceMeters: Long, sportType: SportType): Float = when (sportType) {
         SportType.CYCLING -> progressTowardNextKilometer(distanceMeters)
         SportType.RUNNING -> progressTowardNextPoint(distanceMeters)
+    }
+}
+
+data class RoutePointDto(
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+)
+
+@IgnoreExtraProperties
+data class PlannedRoute(
+    @DocumentId val id: String = "",
+    val userId: String = "",
+    val name: String = "Mon trajet",
+    val sportType: String = SportType.CYCLING.id,
+    val distanceMeters: Long = 0L,
+    val estimatedPoints: Long = 0L,
+    val waypointCount: Long = 0L,
+    val waypointsJson: String = "[]",
+    @ServerTimestamp val createdAt: Timestamp? = null,
+) {
+    fun resolvedSportType(): SportType = SportType.fromId(sportType)
+
+    fun decodeWaypoints(): List<RoutePointDto> = RouteGeometryHelper.decodeWaypointsJson(waypointsJson)
+}
+
+object RouteGeometryHelper {
+    private const val EARTH_RADIUS_METERS = 6_371_000.0
+
+    fun calculateDistanceMeters(points: List<RoutePointDto>): Long {
+        if (points.size < 2) return 0L
+        var total = 0.0
+        for (i in 1 until points.size) {
+            total += haversineMeters(points[i - 1], points[i])
+        }
+        return total.roundToLong()
+    }
+
+    fun haversineMeters(a: RoutePointDto, b: RoutePointDto): Double {
+        val lat1 = Math.toRadians(a.latitude)
+        val lat2 = Math.toRadians(b.latitude)
+        val dLat = lat2 - lat1
+        val dLon = Math.toRadians(b.longitude - a.longitude)
+        val sinLat = sin(dLat / 2.0)
+        val sinLon = sin(dLon / 2.0)
+        val h = sinLat * sinLat + cos(lat1) * cos(lat2) * sinLon * sinLon
+        val c = 2.0 * atan2(sqrt(h), sqrt((1.0 - h).coerceAtLeast(0.0)))
+        return EARTH_RADIUS_METERS * c
+    }
+
+    private val PAIR_REGEX = Regex(
+        """\[\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*,\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*]"""
+    )
+
+    fun encodeWaypointsJson(points: List<RoutePointDto>): String =
+        points.joinToString(prefix = "[", postfix = "]", separator = ",") {
+            "[${it.latitude},${it.longitude}]"
+        }
+
+    fun decodeWaypointsJson(raw: String): List<RoutePointDto> {
+        if (raw.isBlank()) return emptyList()
+        return PAIR_REGEX.findAll(raw).mapNotNull { match ->
+            val lat = match.groupValues[1].toDoubleOrNull()
+            val lon = match.groupValues[2].toDoubleOrNull()
+            if (lat != null && lon != null) RoutePointDto(lat, lon) else null
+        }.toList()
     }
 }

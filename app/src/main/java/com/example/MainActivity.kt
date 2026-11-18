@@ -16,9 +16,11 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DirectionsBike
 import androidx.compose.material.icons.automirrored.rounded.DirectionsBike
+import androidx.compose.material.icons.outlined.EditLocationAlt
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.rounded.EditLocationAlt
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Settings
@@ -68,6 +70,7 @@ import com.example.data.repository.CyclingRepository
 import com.example.data.repository.LocalGuestRepository
 import com.example.location.RideLocationTracker
 import com.example.ui.screens.AuthScreen
+import com.example.ui.screens.EditorScreen
 import com.example.ui.screens.LeaderboardScreen
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.RideScreen
@@ -89,6 +92,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
 const val ROUTE_RIDE = "ride"
+const val ROUTE_EDITOR = "editor"
 const val ROUTE_LEADERBOARD = "leaderboard"
 const val ROUTE_PROFILE = "profile"
 const val ROUTE_SETTINGS = "settings"
@@ -108,6 +112,13 @@ private val VELO_TABS = listOf(
         selectedIcon = Icons.AutoMirrored.Rounded.DirectionsBike,
         unselectedIcon = Icons.AutoMirrored.Outlined.DirectionsBike,
         testTag = "nav_tab_ride",
+    ),
+    VeloTab(
+        route = ROUTE_EDITOR,
+        labelRes = R.string.nav_editor,
+        selectedIcon = Icons.Rounded.EditLocationAlt,
+        unselectedIcon = Icons.Outlined.EditLocationAlt,
+        testTag = "nav_tab_editor",
     ),
     VeloTab(
         route = ROUTE_LEADERBOARD,
@@ -250,6 +261,8 @@ fun MainFeatureScreen(
     val leaderboardCategory by viewModel.leaderboardCategory.collectAsStateWithLifecycle()
     val leaderboardState by viewModel.leaderboardState.collectAsStateWithLifecycle()
     val rideSession by viewModel.rideSession.collectAsStateWithLifecycle()
+    val editorState by viewModel.editorState.collectAsStateWithLifecycle()
+    val plannedRoutesState by viewModel.plannedRoutesState.collectAsStateWithLifecycle()
 
     val updateSettings by updateViewModel.settings.collectAsStateWithLifecycle()
     val updateCheckStatus by updateViewModel.checkStatus.collectAsStateWithLifecycle()
@@ -313,7 +326,14 @@ fun MainFeatureScreen(
                                         hasUpdate = tab.route == ROUTE_SETTINGS && availableUpdate != null,
                                     )
                                 },
-                                label = { Text(stringResource(tab.labelRes)) },
+                                label = {
+                                    Text(
+                                        text = stringResource(tab.labelRes),
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    )
+                                },
                                 modifier = Modifier.testTag(tab.testTag),
                             )
                         }
@@ -365,6 +385,7 @@ fun MainFeatureScreen(
                             availableUpdate = availableUpdate,
                             onOpenUpdateDialog = updateViewModel::openUpdateDialog,
                             onSelectSport = viewModel::selectSport,
+                            onClearGuideRoute = viewModel::clearActiveGuideRoute,
                             onLocationPermissionGranted = viewModel::onLocationPermissionGranted,
                             onStartRide = viewModel::startRide,
                             onPauseRide = viewModel::pauseRide,
@@ -372,6 +393,25 @@ fun MainFeatureScreen(
                             onFinishRide = viewModel::finishRide,
                             onDismissSummary = viewModel::dismissSummary,
                             onNavigateToLeaderboard = { navigateToTab(ROUTE_LEADERBOARD) },
+                        )
+                    }
+                    composable(ROUTE_EDITOR) {
+                        EditorScreen(
+                            editorState = editorState,
+                            plannedRoutesState = plannedRoutesState,
+                            currentLocation = rideSession.currentLocation,
+                            onSelectSport = viewModel::selectEditorSport,
+                            onAddWaypoint = viewModel::addEditorWaypoint,
+                            onUndoWaypoint = viewModel::undoEditorWaypoint,
+                            onCloseLoop = viewModel::closeEditorLoop,
+                            onClearRoute = viewModel::clearEditorRoute,
+                            onSaveRoute = viewModel::saveEditorRoute,
+                            onLoadRoute = viewModel::loadRouteIntoEditor,
+                            onFollowRoute = { route ->
+                                viewModel.followPlannedRoute(route)
+                                navigateToTab(ROUTE_RIDE)
+                            },
+                            onDeleteRoute = viewModel::deletePlannedRoute,
                         )
                     }
                     composable(ROUTE_LEADERBOARD) {

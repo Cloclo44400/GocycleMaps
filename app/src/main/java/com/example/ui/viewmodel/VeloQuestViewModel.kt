@@ -8,6 +8,9 @@ import com.example.data.model.BikeRide
 import com.example.data.model.CyclingPointsCalculator
 import com.example.data.model.LeaderboardCategory
 import com.example.data.model.LeaderboardEntry
+import com.example.data.model.PlannedRoute
+import com.example.data.model.RouteGeometryHelper
+import com.example.data.model.RoutePointDto
 import com.example.data.model.SportType
 import com.example.data.model.UserProfile
 import com.example.data.repository.SportDataRepository
@@ -63,6 +66,7 @@ data class RideSessionState(
     val elapsedSeconds: Long = 0L,
     val currentSpeedKmh: Double = 0.0,
     val lastCompletedSummary: RideSummary? = null,
+    val activeGuideRoute: PlannedRoute? = null,
 ) {
     val livePointsEarned: Long
         get() = CyclingPointsCalculator.calculatePointsForDistanceMeters(distanceMeters, selectedSport)
@@ -72,6 +76,29 @@ data class RideSessionState(
             (distanceMeters / 1000.0) / (elapsedSeconds / 3600.0)
         } else {
             0.0
+        }
+}
+
+data class RouteEditorState(
+    val sportType: SportType = SportType.CYCLING,
+    val waypoints: List<GeoPoint> = emptyList(),
+    val isSaving: Boolean = false,
+) {
+    val waypointDtos: List<RoutePointDto>
+        get() = waypoints.map { RoutePointDto(it.latitude, it.longitude) }
+
+    val distanceMeters: Long
+        get() = RouteGeometryHelper.calculateDistanceMeters(waypointDtos)
+
+    val estimatedPoints: Long
+        get() = CyclingPointsCalculator.calculatePointsForDistanceMeters(distanceMeters, sportType)
+
+    val estimatedDurationMinutes: Long
+        get() {
+            if (distanceMeters <= 0L) return 0L
+            val avgSpeedKmh = if (sportType == SportType.RUNNING) 10.0 else 18.0
+            val hours = (distanceMeters / 1000.0) / avgSpeedKmh
+            return (hours * 60.0).toLong().coerceAtLeast(1L)
         }
 }
 
@@ -148,6 +175,26 @@ class VeloQuestViewModel(
 
     private val _rideSession = MutableStateFlow(RideSessionState())
     val rideSession: StateFlow<RideSessionState> = _rideSession.asStateFlow()
+
+    private val _editorState = MutableStateFlow(RouteEditorState())
+    val editorState: StateFlow<RouteEditorState> = _editorState.asStateFlow()
+
+    val plannedRoutesState: StateFlow<UiState<List<PlannedRoute>>> = repository.observePlannedRoutes(currentUserId)
+        .map<List<PlannedRoute>, UiState<List<PlannedRoute>>> { UiState.Success(it) }
+        .catch { error ->
+            val firestoreError = generateSequence(error) { it.cause }
+                .filterIsInstance<FirebaseFirestoreException>()
+                .firstOrNull()
+            if (firestoreError == null && error is CancellationException) throw error
+            val rootError = firestoreError ?: error
+            Log.w(TAG, "Error observing planned routes", rootError)
+            emit(UiState.Error(rootError.localizedMessage ?: "Impossible de charger vos trajets."))
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+            initialValue = UiState.Loading,
+        )
 
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
@@ -381,6 +428,108 @@ class VeloQuestViewModel(
                 _events.tryEmit("Erreur lors de la suppression.")
             }
         }
+    }
+
+    fun selectEditorSport(sportType: SportType) {
+        _editorState.update { it.copy(sportType = sportType) }
+    }
+
+    fun addEditorWaypoint(point: GeoPoint) {
+        if (_editorState.value.waypoints.size >= 500) {
+            _events.tryEmit("Limite de 500 repères atteinte pour ce trajet.")
+            return
+        }
+        _editorState.update { it.copy(waypoints = it.waypoints + point) }
+    }
+
+    fun undoEditorWaypoint() {
+        _editorState.update { state ->
+            if (state.waypoints.isEmpty()) state else state.copy(waypoints = state.waypoints.dropLast(1))
+        }
+    }
+
+    fun closeEditorLoop() {
+        val current = _editorState.value.waypoints
+        if (current.size < 2) {
+            _events.tryEmit("Placez au moins 2 points avant de boucler le trajet.")
+            return
+        }
+        val first = current.first()
+        val last = current.last()
+        if (first.latitude == last.latitude && first.longitude == last.longitude) return
+        _editorState.update { it.copy(waypoints = it.waypoints + first) }
+    }
+
+    fun clearEditorRoute() {
+        _editorState.update { it.copy(waypoints = emptyList()) }
+    }
+
+    fun loadRouteIntoEditor(route: PlannedRoute) {
+        val loaded = route.decodeWaypoints().map { GeoPoint(it.latitude, it.longitude) }
+        _editorState.value = RouteEditorState(
+            sportType = route.resolvedSportType(),
+            waypoints = loaded,
+            isSaving = false,
+        )
+        _events.tryEmit("Trajet « ${route.name} » chargé dans l'éditeur.")
+    }
+
+    fun saveEditorRoute(routeName: String) {
+        val current = _editorState.value
+        if (current.waypoints.size < 2) {
+            _events.tryEmit("Placez au moins 2 points sur la carte pour enregistrer un trajet.")
+            return
+        }
+        if (current.isSaving) return
+        val dtos = current.waypointDtos
+        val distanceMeters = current.distanceMeters.coerceAtLeast(1L)
+        _editorState.update { it.copy(isSaving = true) }
+        viewModelScope.launch {
+            try {
+                repository.savePlannedRoute(
+                    name = routeName,
+                    sportType = current.sportType,
+                    distanceMeters = distanceMeters,
+                    waypoints = dtos,
+                )
+                _editorState.update { it.copy(isSaving = false) }
+                _events.tryEmit("Trajet enregistré !")
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                _editorState.update { it.copy(isSaving = false) }
+                _events.tryEmit("Impossible d'enregistrer le trajet : ${e.localizedMessage}")
+            }
+        }
+    }
+
+    fun deletePlannedRoute(routeId: String) {
+        viewModelScope.launch {
+            try {
+                repository.deletePlannedRoute(routeId)
+                if (_rideSession.value.activeGuideRoute?.id == routeId) {
+                    clearActiveGuideRoute()
+                }
+                _events.tryEmit("Trajet supprimé.")
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                _events.tryEmit("Erreur lors de la suppression du trajet.")
+            }
+        }
+    }
+
+    fun followPlannedRoute(route: PlannedRoute) {
+        _rideSession.update { state ->
+            val updatedSport = if (state.status == RideStatus.IDLE) route.resolvedSportType() else state.selectedSport
+            state.copy(
+                selectedSport = updatedSport,
+                activeGuideRoute = route,
+            )
+        }
+        _events.tryEmit("Tracé « ${route.name} » affiché sur la carte Sport.")
+    }
+
+    fun clearActiveGuideRoute() {
+        _rideSession.update { it.copy(activeGuideRoute = null) }
     }
 
     private fun startTimer() {

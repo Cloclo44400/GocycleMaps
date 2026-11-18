@@ -237,3 +237,49 @@ test("Authenticated user can record 2.5km cycling (25 pts) and 400m running (100
   });
   await assertSucceeds(renameBatch.commit());
 });
+
+test("Authenticated user can create, list, and delete planned routes with owner-only isolation", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const routeRef = aliceDb.collection("users").doc(ALICE_UID).collection("routes").doc("route_1");
+
+  await assertSucceeds(
+    routeRef.set({
+      userId: ALICE_UID,
+      name: "Boucle de la Loire",
+      sportType: "cycling",
+      distanceMeters: 4200,
+      estimatedPoints: 42,
+      waypointCount: 4,
+      waypointsJson: "[[47.21,-1.55],[47.22,-1.54],[47.23,-1.56],[47.21,-1.55]]",
+      createdAt: nowTimestamp(),
+    })
+  );
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("routes").orderBy("createdAt", "desc").get()
+  );
+
+  // Reject route with invalid waypointCount (< 2)
+  await assertFails(
+    aliceDb.collection("users").doc(ALICE_UID).collection("routes").doc("route_bad").set({
+      userId: ALICE_UID,
+      name: "Trop court",
+      sportType: "running",
+      distanceMeters: 100,
+      estimatedPoints: 25,
+      waypointCount: 1,
+      waypointsJson: "[[47.21,-1.55]]",
+      createdAt: nowTimestamp(),
+    })
+  );
+
+  // Bob cannot read or write Alice's planned routes
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  await assertFails(bobDb.collection("users").doc(ALICE_UID).collection("routes").get());
+  await assertFails(
+    bobDb.collection("users").doc(ALICE_UID).collection("routes").doc("route_1").delete()
+  );
+
+  // Alice can delete her own route
+  await assertSucceeds(routeRef.delete());
+});

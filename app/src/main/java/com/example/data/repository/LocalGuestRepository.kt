@@ -7,6 +7,9 @@ import com.example.data.model.CosmeticDefaults
 import com.example.data.model.CyclingPointsCalculator
 import com.example.data.model.LeaderboardCategory
 import com.example.data.model.LeaderboardEntry
+import com.example.data.model.PlannedRoute
+import com.example.data.model.RouteGeometryHelper
+import com.example.data.model.RoutePointDto
 import com.example.data.model.SportType
 import com.example.data.model.UserProfile
 import com.google.firebase.Timestamp
@@ -23,6 +26,7 @@ class LocalGuestRepository(context: Context) : SportDataRepository {
 
     private val profileFlow = MutableStateFlow(readProfile())
     private val ridesFlow = MutableStateFlow(readRides())
+    private val plannedRoutesFlow = MutableStateFlow(readPlannedRoutes())
 
     override suspend fun ensureUserProfile(displayNameFallback: String): UserProfile {
         val current = readProfile()
@@ -157,6 +161,40 @@ class LocalGuestRepository(context: Context) : SportDataRepository {
         saveRides(ridesFlow.value.filterNot { it.id == rideId })
     }
 
+    override fun observePlannedRoutes(userId: String): Flow<List<PlannedRoute>> = plannedRoutesFlow
+
+    override suspend fun savePlannedRoute(
+        name: String,
+        sportType: SportType,
+        distanceMeters: Long,
+        waypoints: List<RoutePointDto>,
+    ): String {
+        require(waypoints.size in 2..500) { "Placez entre 2 et 500 points sur la carte." }
+        val resolvedDistance = distanceMeters.coerceIn(1L, 1_000_000L)
+        val estimatedPoints = CyclingPointsCalculator.calculatePointsForDistanceMeters(resolvedDistance, sportType)
+        val cleanName = name.trim().take(80).ifEmpty {
+            if (sportType == SportType.RUNNING) "Parcours course" else "Itinéraire vélo"
+        }
+        val routeId = UUID.randomUUID().toString()
+        val route = PlannedRoute(
+            id = routeId,
+            userId = GUEST_USER_ID,
+            name = cleanName,
+            sportType = sportType.id,
+            distanceMeters = resolvedDistance,
+            estimatedPoints = estimatedPoints,
+            waypointCount = waypoints.size.toLong(),
+            waypointsJson = RouteGeometryHelper.encodeWaypointsJson(waypoints),
+            createdAt = Timestamp.now(),
+        )
+        savePlannedRoutes(listOf(route) + plannedRoutesFlow.value)
+        return routeId
+    }
+
+    override suspend fun deletePlannedRoute(routeId: String) {
+        savePlannedRoutes(plannedRoutesFlow.value.filterNot { it.id == routeId })
+    }
+
     private fun readProfile(): UserProfile {
         val raw = prefs.getString(KEY_PROFILE, null)
         if (raw.isNullOrBlank()) {
@@ -264,10 +302,57 @@ class LocalGuestRepository(context: Context) : SportDataRepository {
         ridesFlow.value = rides
     }
 
+    private fun readPlannedRoutes(): List<PlannedRoute> {
+        val raw = prefs.getString(KEY_ROUTES, null) ?: return emptyList()
+        return runCatching {
+            val array = JSONArray(raw)
+            buildList {
+                for (i in 0 until array.length()) {
+                    val obj = array.optJSONObject(i) ?: continue
+                    val createdMillis = obj.optLong("createdAtMillis", System.currentTimeMillis())
+                    add(
+                        PlannedRoute(
+                            id = obj.optString("id", UUID.randomUUID().toString()),
+                            userId = GUEST_USER_ID,
+                            name = obj.optString("name", "Mon trajet"),
+                            sportType = obj.optString("sportType", SportType.CYCLING.id),
+                            distanceMeters = obj.optLong("distanceMeters", 0L),
+                            estimatedPoints = obj.optLong("estimatedPoints", 0L),
+                            waypointCount = obj.optLong("waypointCount", 0L),
+                            waypointsJson = obj.optString("waypointsJson", "[]"),
+                            createdAt = Timestamp(Date(createdMillis)),
+                        )
+                    )
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun savePlannedRoutes(routes: List<PlannedRoute>) {
+        val array = JSONArray()
+        routes.forEach { route ->
+            array.put(
+                JSONObject().apply {
+                    put("id", route.id)
+                    put("name", route.name)
+                    put("sportType", route.sportType)
+                    put("distanceMeters", route.distanceMeters)
+                    put("estimatedPoints", route.estimatedPoints)
+                    put("waypointCount", route.waypointCount)
+                    put("waypointsJson", route.waypointsJson)
+                    put("createdAtMillis", route.createdAt?.toDate()?.time ?: System.currentTimeMillis())
+                }
+            )
+        }
+        prefs.edit { putString(KEY_ROUTES, array.toString()) }
+        plannedRoutesFlow.value = routes
+    }
+
     companion object {
         const val GUEST_USER_ID = "guest_local"
         private const val PREFS_NAME = "gocyclemaps_guest_prefs"
         private const val KEY_PROFILE = "guest_profile_json"
         private const val KEY_RIDES = "guest_rides_json"
+        private const val KEY_ROUTES = "guest_routes_json"
     }
 }

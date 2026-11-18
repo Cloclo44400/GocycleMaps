@@ -7,6 +7,9 @@ import com.example.data.model.CosmeticDefaults
 import com.example.data.model.CyclingPointsCalculator
 import com.example.data.model.LeaderboardCategory
 import com.example.data.model.LeaderboardEntry
+import com.example.data.model.PlannedRoute
+import com.example.data.model.RouteGeometryHelper
+import com.example.data.model.RoutePointDto
 import com.example.data.model.SportType
 import com.example.data.model.UserProfile
 import com.google.firebase.Firebase
@@ -388,6 +391,80 @@ class CyclingRepository(
             throw e
         } catch (e: Exception) {
             handleFirestoreError(e, OperationType.DELETE, rideRef.path)
+            throw e
+        }
+    }
+
+    override fun observePlannedRoutes(userId: String): Flow<List<PlannedRoute>> = flow {
+        val colRef = db.collection("users").document(userId).collection("routes")
+        emitAll(
+            colRef.orderBy("createdAt", Query.Direction.DESCENDING)
+                .snapshots()
+                .map { snapshot ->
+                    snapshot.toObjects(
+                        PlannedRoute::class.java,
+                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE,
+                    )
+                }
+                .catch { error ->
+                    val firestoreError = generateSequence(error) { it.cause }
+                        .filterIsInstance<FirebaseFirestoreException>()
+                        .firstOrNull()
+                    if (firestoreError == null && error is CancellationException) throw error
+                    val exceptionToLog = firestoreError ?: (error as? Exception)
+                    if (exceptionToLog != null && auth.currentUser?.uid == userId) {
+                        handleFirestoreError(exceptionToLog, OperationType.LIST, colRef.path)
+                    }
+                    throw error
+                }
+        )
+    }
+
+    override suspend fun savePlannedRoute(
+        name: String,
+        sportType: SportType,
+        distanceMeters: Long,
+        waypoints: List<RoutePointDto>,
+    ): String {
+        val uid = requireUserId()
+        require(waypoints.size in 2..500) { "Placez entre 2 et 500 points sur la carte." }
+        val resolvedDistance = distanceMeters.coerceIn(1L, 1_000_000L)
+        val estimatedPoints = CyclingPointsCalculator.calculatePointsForDistanceMeters(resolvedDistance, sportType)
+        val cleanName = name.trim().take(80).ifEmpty {
+            if (sportType == SportType.RUNNING) "Parcours course" else "Itinéraire vélo"
+        }
+        val routeId = UUID.randomUUID().toString()
+        val routeRef = db.collection("users").document(uid).collection("routes").document(routeId)
+        val payload = mapOf(
+            "userId" to uid,
+            "name" to cleanName,
+            "sportType" to sportType.id,
+            "distanceMeters" to resolvedDistance,
+            "estimatedPoints" to estimatedPoints,
+            "waypointCount" to waypoints.size.toLong(),
+            "waypointsJson" to RouteGeometryHelper.encodeWaypointsJson(waypoints),
+            "createdAt" to FieldValue.serverTimestamp(),
+        )
+        return try {
+            routeRef.set(payload).await()
+            routeId
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.CREATE, routeRef.path)
+            throw e
+        }
+    }
+
+    override suspend fun deletePlannedRoute(routeId: String) {
+        val uid = requireUserId()
+        val routeRef = db.collection("users").document(uid).collection("routes").document(routeId)
+        try {
+            routeRef.delete().await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, routeRef.path)
             throw e
         }
     }

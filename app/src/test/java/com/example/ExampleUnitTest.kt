@@ -2,6 +2,8 @@ package com.example
 
 import com.example.data.model.CosmeticCatalog
 import com.example.data.model.CyclingPointsCalculator
+import com.example.data.model.RouteGeometryHelper
+import com.example.data.model.RoutePointDto
 import com.example.data.model.SportType
 import com.example.update.UpdateSettings
 import com.example.update.VersionComparator
@@ -49,5 +51,21 @@ class ExampleUnitTest {
         assertEquals("cloclo44400" to "GoCycleMaps", UpdateSettings.parseOwnerRepo("https://github.com/cloclo44400/GoCycleMaps/"))
         assertNull(UpdateSettings.parseOwnerRepo("invalid-repo"))
         assertNotNull(CosmeticCatalog.findById("bike_mint"))
+    }
+
+    @Test
+    fun routeGeometryHelper_calculatesDistanceAndSerializesWaypoints() {
+        val points = listOf(
+            RoutePointDto(48.8566, 2.3522),
+            RoutePointDto(48.8656, 2.3522),
+        )
+        val distanceMeters = RouteGeometryHelper.calculateDistanceMeters(points)
+        assertTrue("Expected ~1000m, got $distanceMeters", distanceMeters in 980L..1020L)
+
+        val json = RouteGeometryHelper.encodeWaypointsJson(points)
+        val decoded = RouteGeometryHelper.decodeWaypointsJson(json)
+        assertEquals(2, decoded.size)
+        assertEquals(48.8566, decoded[0].latitude, 0.0001)
+        assertEquals(2.3522, decoded[1].longitude, 0.0001)
     }
 }

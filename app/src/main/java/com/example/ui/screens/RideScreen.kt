@@ -28,9 +28,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.DirectionsBike
 import androidx.compose.material.icons.automirrored.rounded.DirectionsRun
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.MyLocation
+import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SystemUpdate
@@ -99,6 +101,7 @@ fun RideScreen(
     availableUpdate: GitHubReleaseInfo?,
     onOpenUpdateDialog: () -> Unit,
     onSelectSport: (SportType) -> Unit,
+    onClearGuideRoute: () -> Unit,
     onLocationPermissionGranted: () -> Unit,
     onStartRide: () -> Unit,
     onPauseRide: () -> Unit,
@@ -165,6 +168,14 @@ fun RideScreen(
         }
     }
 
+    val guideRouteOverlay = remember(mapView) {
+        Polyline(mapView).apply {
+            outlinePaint.strokeWidth = 11f
+            outlinePaint.strokeCap = Paint.Cap.ROUND
+            outlinePaint.strokeJoin = Paint.Join.ROUND
+        }
+    }
+
     val routeOverlay = remember(mapView) {
         Polyline(mapView).apply {
             outlinePaint.strokeWidth = 14f
@@ -213,6 +224,14 @@ fun RideScreen(
             modifier = Modifier.fillMaxSize(),
             update = { view ->
                 view.overlays.clear()
+
+                val guidePoints = rideSession.activeGuideRoute?.decodeWaypoints().orEmpty()
+                    .map { GeoPoint(it.latitude, it.longitude) }
+                if (guidePoints.size >= 2) {
+                    guideRouteOverlay.outlinePaint.color = sportAccentColor.copy(alpha = 0.45f).toArgb()
+                    guideRouteOverlay.setPoints(guidePoints)
+                    view.overlays.add(guideRouteOverlay)
+                }
 
                 if (rideSession.routePoints.size >= 2) {
                     routeOverlay.outlinePaint.color = sportAccentColor.toArgb()
@@ -382,6 +401,51 @@ fun RideScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            rideSession.activeGuideRoute?.let { guide ->
+                Surface(
+                    modifier = Modifier
+                        .widthIn(max = 560.dp)
+                        .fillMaxWidth()
+                        .testTag("active_guide_banner"),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.96f),
+                    shadowElevation = 4.dp,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Navigation,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = "Tracé suivi : ${guide.name} (${String.format(Locale.FRANCE, "%.1f km", guide.distanceMeters / 1000.0)})",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        androidx.compose.material3.IconButton(
+                            onClick = onClearGuideRoute,
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = "Masquer le tracé suivi",
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(18.dp),
+                            )
                         }
                     }
                 }
