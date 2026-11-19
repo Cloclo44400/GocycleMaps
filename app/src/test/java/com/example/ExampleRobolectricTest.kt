@@ -6,6 +6,8 @@ import com.example.data.model.LeaderboardCategory
 import com.example.data.model.RoutePointDto
 import com.example.data.model.SportType
 import com.example.data.repository.LocalGuestRepository
+import com.example.location.PowerMode
+import com.example.location.PowerModePreferences
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -23,6 +25,22 @@ class ExampleRobolectricTest {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val appName = context.getString(R.string.app_name)
     assertEquals("GoCycleMaps", appName)
+  }
+
+  @Test
+  fun `power mode preferences persists eco and standard selection`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val firstInstance = PowerModePreferences(context)
+    assertEquals(PowerMode.STANDARD, firstInstance.powerMode.value)
+
+    firstInstance.setPowerMode(PowerMode.ECO)
+    assertEquals(PowerMode.ECO, firstInstance.powerMode.value)
+
+    val reloadedInstance = PowerModePreferences(context)
+    assertEquals(PowerMode.ECO, reloadedInstance.powerMode.value)
+
+    reloadedInstance.setPowerMode(PowerMode.STANDARD)
+    assertEquals(PowerMode.STANDARD, PowerModePreferences(context).powerMode.value)
   }
 
   @Test

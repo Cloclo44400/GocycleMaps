@@ -14,6 +14,8 @@ import com.example.data.model.RoutePointDto
 import com.example.data.model.SportType
 import com.example.data.model.UserProfile
 import com.example.data.repository.SportDataRepository
+import com.example.location.PowerMode
+import com.example.location.PowerModePreferences
 import com.example.location.RideLocationTracker
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
@@ -107,7 +109,11 @@ class VeloQuestViewModel(
     private val locationTracker: RideLocationTracker,
     private val currentUserId: String,
     initialDisplayName: String,
+    private val powerModePreferences: PowerModePreferences? = null,
 ) : ViewModel() {
+
+    private val _fallbackPowerMode = MutableStateFlow(PowerMode.STANDARD)
+    val powerMode: StateFlow<PowerMode> = powerModePreferences?.powerMode ?: _fallbackPowerMode.asStateFlow()
 
     val profileState: StateFlow<UiState<UserProfile>> = repository.observeUserProfile(currentUserId)
         .map<UserProfile?, UiState<UserProfile>> { profile ->
@@ -225,6 +231,20 @@ class VeloQuestViewModel(
         _leaderboardCategory.value = category
     }
 
+    fun setPowerMode(mode: PowerMode) {
+        if (powerModePreferences != null) {
+            powerModePreferences.setPowerMode(mode)
+        } else {
+            _fallbackPowerMode.value = mode
+        }
+        val msg = if (mode == PowerMode.ECO) {
+            "Mode Éco activé (limitation de la batterie)."
+        } else {
+            "Mode Standard activé (aucune restriction de batterie)."
+        }
+        _events.tryEmit(msg)
+    }
+
     fun onLocationPermissionGranted() {
         viewModelScope.launch {
             val lastLoc = locationTracker.getLastKnownLocation()
@@ -237,10 +257,12 @@ class VeloQuestViewModel(
         startLocationUpdates()
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun startLocationUpdates() {
         if (locationJob?.isActive == true) return
         locationJob = viewModelScope.launch {
-            locationTracker.locationUpdates()
+            powerMode
+                .flatMapLatest { mode -> locationTracker.locationUpdates(mode) }
                 .catch { e ->
                     Log.w(TAG, "Location updates stopped: ${e.localizedMessage}")
                 }

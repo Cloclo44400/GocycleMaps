@@ -4,6 +4,7 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,12 +25,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.BatteryChargingFull
+import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.InstallMobile
 import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.RadioButtonChecked
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.AlertDialog
@@ -45,6 +51,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,8 +64,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.BuildConfig
 import com.example.R
+import com.example.location.BatteryOptimizationHelper
+import com.example.location.PowerMode
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.update.ApkDownloadState
 import com.example.update.GitHubReleaseInfo
@@ -71,6 +83,8 @@ import java.util.Locale
 
 @Composable
 fun SettingsScreen(
+    powerMode: PowerMode,
+    onSelectPowerMode: (PowerMode) -> Unit,
     settings: UpdateSettings,
     checkStatus: UpdateCheckStatus,
     downloadState: ApkDownloadState,
@@ -82,11 +96,24 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var repoInput by remember(settings.githubRepoSlug) { mutableStateOf(settings.githubRepoSlug) }
     var autoCheck by remember(settings.autoCheckEnabled) { mutableStateOf(settings.autoCheckEnabled) }
     var notificationsEnabled by remember(settings.notificationsEnabled) { mutableStateOf(settings.notificationsEnabled) }
     var includePreReleases by remember(settings.includePreReleases) { mutableStateOf(settings.includePreReleases) }
     var hasNotifPermission by remember { mutableStateOf(UpdateNotificationHelper.hasNotificationPermission(context)) }
+    var isUnrestrictedBattery by remember { mutableStateOf(BatteryOptimizationHelper.isUnrestrictedBattery(context)) }
+
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isUnrestrictedBattery = BatteryOptimizationHelper.isUnrestrictedBattery(context)
+                hasNotifPermission = UpdateNotificationHelper.hasNotificationPermission(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -140,6 +167,114 @@ fun SettingsScreen(
                                 .padding(10.dp)
                                 .size(24.dp),
                         )
+                    }
+                }
+            }
+
+            // Battery & GPS Power Mode Card
+            item {
+                Surface(
+                    shape = RoundedCornerShape(22.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 2.dp,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = "Gestion de la batterie",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = "Choisissez comment GoCycleMaps gère la fréquence GPS et la batterie pendant vos sorties.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+
+                        PowerModeOptionCard(
+                            mode = PowerMode.ECO,
+                            selected = powerMode == PowerMode.ECO,
+                            icon = Icons.Rounded.BatterySaver,
+                            description = "Avec limitation de la batterie : économise l'énergie avec des relevés GPS espacés (5 s / 8 m).",
+                            onClick = { onSelectPowerMode(PowerMode.ECO) },
+                        )
+
+                        PowerModeOptionCard(
+                            mode = PowerMode.STANDARD,
+                            selected = powerMode == PowerMode.STANDARD,
+                            icon = Icons.Rounded.BatteryChargingFull,
+                            description = "Aucune restriction de batterie : précision GPS maximale en continu (2 s / 2 m).",
+                            onClick = { onSelectPowerMode(PowerMode.STANDARD) },
+                        )
+
+                        if (powerMode == PowerMode.STANDARD) {
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = if (isUnrestrictedBattery) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.secondaryContainer
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isUnrestrictedBattery) {
+                                                Icons.Rounded.CheckCircle
+                                            } else {
+                                                Icons.Rounded.WarningAmber
+                                            },
+                                            contentDescription = null,
+                                            tint = if (isUnrestrictedBattery) {
+                                                MaterialTheme.colorScheme.onPrimaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.onSecondaryContainer
+                                            },
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                        Text(
+                                            text = if (isUnrestrictedBattery) {
+                                                "Système Android : aucune restriction appliquée"
+                                            } else {
+                                                "Android limite encore l'app en arrière-plan"
+                                            },
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isUnrestrictedBattery) {
+                                                MaterialTheme.colorScheme.onPrimaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.onSecondaryContainer
+                                            },
+                                        )
+                                    }
+
+                                    if (!isUnrestrictedBattery) {
+                                        OutlinedButton(
+                                            onClick = { BatteryOptimizationHelper.openAppBatterySettings(context) },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(min = 48.dp)
+                                                .testTag("open_battery_settings_button"),
+                                            shape = RoundedCornerShape(12.dp),
+                                        ) {
+                                            Icon(Icons.Rounded.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("Passer en « Non restreinte » (Android)")
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -613,6 +748,97 @@ fun UpdateAvailableDialog(
             }
         },
     )
+}
+
+@Composable
+private fun PowerModeOptionCard(
+    mode: PowerMode,
+    selected: Boolean,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    onClick: () -> Unit,
+) {
+    Surface(
+        selected = selected,
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        },
+        border = BorderStroke(
+            width = if (selected) 1.5.dp else 1.dp,
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            },
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .testTag("power_mode_${mode.id}"),
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surface
+                },
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (selected) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .size(20.dp),
+                )
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    text = mode.labelFr,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Icon(
+                imageVector = if (selected) {
+                    Icons.Rounded.RadioButtonChecked
+                } else {
+                    Icons.Rounded.RadioButtonUnchecked
+                },
+                contentDescription = null,
+                tint = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
+    }
 }
 
 private fun formatUpdateDate(millis: Long): String {

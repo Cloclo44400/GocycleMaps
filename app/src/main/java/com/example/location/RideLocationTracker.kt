@@ -25,10 +25,14 @@ class RideLocationTracker(context: Context) {
     }
 
     @SuppressLint("MissingPermission")
-    fun locationUpdates(): Flow<Location> = callbackFlow {
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000L)
-            .setMinUpdateIntervalMillis(1000L)
-            .setMinUpdateDistanceMeters(2f)
+    fun locationUpdates(powerMode: PowerMode = PowerMode.STANDARD): Flow<Location> = callbackFlow {
+        val priority = when (powerMode) {
+            PowerMode.ECO -> Priority.PRIORITY_BALANCED_POWER_ACCURACY
+            PowerMode.STANDARD -> Priority.PRIORITY_HIGH_ACCURACY
+        }
+        val request = LocationRequest.Builder(priority, powerMode.updateIntervalMillis)
+            .setMinUpdateIntervalMillis(powerMode.minUpdateIntervalMillis)
+            .setMinUpdateDistanceMeters(powerMode.minUpdateDistanceMeters)
             .build()
 
         val callback = object : LocationCallback() {

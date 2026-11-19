@@ -68,6 +68,7 @@ import com.example.auth.signOutUser
 import com.example.data.model.UserProfile
 import com.example.data.repository.CyclingRepository
 import com.example.data.repository.LocalGuestRepository
+import com.example.location.PowerModePreferences
 import com.example.location.RideLocationTracker
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.EditorScreen
@@ -240,6 +241,7 @@ fun MainFeatureScreen(
                     locationTracker = RideLocationTracker(app),
                     currentUserId = currentUserId,
                     initialDisplayName = initialDisplayName,
+                    powerModePreferences = PowerModePreferences(app),
                 )
             }
         },
@@ -263,6 +265,7 @@ fun MainFeatureScreen(
     val rideSession by viewModel.rideSession.collectAsStateWithLifecycle()
     val editorState by viewModel.editorState.collectAsStateWithLifecycle()
     val plannedRoutesState by viewModel.plannedRoutesState.collectAsStateWithLifecycle()
+    val powerMode by viewModel.powerMode.collectAsStateWithLifecycle()
 
     val updateSettings by updateViewModel.settings.collectAsStateWithLifecycle()
     val updateCheckStatus by updateViewModel.checkStatus.collectAsStateWithLifecycle()
@@ -450,6 +453,8 @@ fun MainFeatureScreen(
                     }
                     composable(ROUTE_SETTINGS) {
                         SettingsScreen(
+                            powerMode = powerMode,
+                            onSelectPowerMode = viewModel::setPowerMode,
                             settings = updateSettings,
                             checkStatus = updateCheckStatus,
                             downloadState = apkDownloadState,

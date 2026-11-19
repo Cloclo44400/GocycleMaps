@@ -5,6 +5,7 @@ import com.example.data.model.CyclingPointsCalculator
 import com.example.data.model.RouteGeometryHelper
 import com.example.data.model.RoutePointDto
 import com.example.data.model.SportType
+import com.example.location.PowerMode
 import com.example.update.UpdateSettings
 import com.example.update.VersionComparator
 import org.junit.Assert.assertEquals
@@ -67,5 +68,16 @@ class ExampleUnitTest {
         assertEquals(2, decoded.size)
         assertEquals(48.8566, decoded[0].latitude, 0.0001)
         assertEquals(2.3522, decoded[1].longitude, 0.0001)
+    }
+
+    @Test
+    fun powerMode_exposesExpectedIdsAndIntervals() {
+        assertEquals(PowerMode.ECO, PowerMode.fromId("eco"))
+        assertEquals(PowerMode.STANDARD, PowerMode.fromId("standard"))
+        assertEquals(PowerMode.STANDARD, PowerMode.fromId(null))
+        assertEquals(PowerMode.STANDARD, PowerMode.fromId("unknown"))
+
+        assertTrue(PowerMode.ECO.updateIntervalMillis > PowerMode.STANDARD.updateIntervalMillis)
+        assertTrue(PowerMode.ECO.minUpdateDistanceMeters > PowerMode.STANDARD.minUpdateDistanceMeters)
     }
 }
