@@ -68,8 +68,7 @@ import com.example.auth.signOutUser
 import com.example.data.model.UserProfile
 import com.example.data.repository.CyclingRepository
 import com.example.data.repository.LocalGuestRepository
-import com.example.location.PowerModePreferences
-import com.example.location.RideLocationTracker
+import com.example.location.RideSessionCoordinator
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.EditorScreen
 import com.example.ui.screens.LeaderboardScreen
@@ -219,6 +218,7 @@ fun MainFeatureScreen(
     onConsumedOpenUpdates: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val credentialManager = remember(context) { CredentialManager.create(context) }
 
@@ -238,10 +238,9 @@ fun MainFeatureScreen(
                 }
                 VeloQuestViewModel(
                     repository = repository,
-                    locationTracker = RideLocationTracker(app),
+                    sessionCoordinator = RideSessionCoordinator.getInstance(app),
                     currentUserId = currentUserId,
                     initialDisplayName = initialDisplayName,
-                    powerModePreferences = PowerModePreferences(app),
                 )
             }
         },
@@ -257,6 +256,16 @@ fun MainFeatureScreen(
             }
         },
     )
+
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.onAppResumed()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val profileState by viewModel.profileState.collectAsStateWithLifecycle()
     val ridesState by viewModel.ridesState.collectAsStateWithLifecycle()

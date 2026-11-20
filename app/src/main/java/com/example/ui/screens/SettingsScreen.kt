@@ -198,7 +198,7 @@ fun SettingsScreen(
                             mode = PowerMode.ECO,
                             selected = powerMode == PowerMode.ECO,
                             icon = Icons.Rounded.BatterySaver,
-                            description = "Avec limitation de la batterie : économise l'énergie avec des relevés GPS espacés (5 s / 8 m).",
+                            description = "Avec limitation de la batterie : économise l'énergie avec des relevés GPS espacés (5 s / 8 m), suivi maintenu en sortie.",
                             onClick = { onSelectPowerMode(PowerMode.ECO) },
                         )
 
@@ -206,7 +206,7 @@ fun SettingsScreen(
                             mode = PowerMode.STANDARD,
                             selected = powerMode == PowerMode.STANDARD,
                             icon = Icons.Rounded.BatteryChargingFull,
-                            description = "Aucune restriction de batterie : précision GPS maximale en continu (2 s / 2 m).",
+                            description = "Aucune restriction de batterie : précision GPS maximale en continu (2 s / 2 m), même téléphone en veille.",
                             onClick = { onSelectPowerMode(PowerMode.STANDARD) },
                         )
 

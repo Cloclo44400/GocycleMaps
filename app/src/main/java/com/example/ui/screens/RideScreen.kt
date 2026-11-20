@@ -121,6 +121,21 @@ fun RideScreen(
         )
     }
 
+    val permissionsToRequest = remember {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.POST_NOTIFICATIONS,
+            )
+        } else {
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            )
+        }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -200,7 +215,12 @@ fun RideScreen(
     DisposableEffect(lifecycleOwner, mapView) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> mapView.onResume()
+                Lifecycle.Event.ON_RESUME -> {
+                    hasLocationPermission =
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    mapView.onResume()
+                }
                 Lifecycle.Event.ON_PAUSE -> mapView.onPause()
                 else -> Unit
             }
@@ -507,12 +527,7 @@ fun RideScreen(
                         )
                         Button(
                             onClick = {
-                                permissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION,
-                                    )
-                                )
+                                permissionLauncher.launch(permissionsToRequest)
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -643,12 +658,7 @@ fun RideScreen(
                             Button(
                                 onClick = {
                                     if (!hasLocationPermission) {
-                                        permissionLauncher.launch(
-                                            arrayOf(
-                                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                                Manifest.permission.ACCESS_COARSE_LOCATION,
-                                            )
-                                        )
+                                        permissionLauncher.launch(permissionsToRequest)
                                     } else {
                                         onStartRide()
                                     }

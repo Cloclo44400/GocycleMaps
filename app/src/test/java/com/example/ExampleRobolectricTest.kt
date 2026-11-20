@@ -1,6 +1,7 @@
 package com.example
 
 import android.content.Context
+import android.location.Location
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.model.LeaderboardCategory
 import com.example.data.model.RoutePointDto
@@ -8,9 +9,13 @@ import com.example.data.model.SportType
 import com.example.data.repository.LocalGuestRepository
 import com.example.location.PowerMode
 import com.example.location.PowerModePreferences
+import com.example.location.RideSessionCoordinator
+import com.example.location.RideTrackingService
+import com.example.ui.viewmodel.RideStatus
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -41,6 +46,47 @@ class ExampleRobolectricTest {
 
     reloadedInstance.setPowerMode(PowerMode.STANDARD)
     assertEquals(PowerMode.STANDARD, PowerModePreferences(context).powerMode.value)
+  }
+
+  @Test
+  fun `ride session coordinator tracks locations across pause resume and notification channel`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    RideTrackingService.ensureNotificationChannel(context)
+
+    val coordinator = RideSessionCoordinator(context)
+    coordinator.selectSport(SportType.RUNNING)
+    coordinator.startRide()
+    assertEquals(RideStatus.RIDING, coordinator.rideSession.value.status)
+
+    val p1 = Location("gps").apply {
+      latitude = 48.8566
+      longitude = 2.3522
+      accuracy = 5f
+      time = 1000L
+    }
+    val p2 = Location("gps").apply {
+      latitude = 48.8576
+      longitude = 2.3522
+      accuracy = 5f
+      time = 21000L
+    }
+    coordinator.onLocationUpdate(p1)
+    coordinator.onLocationUpdate(p2)
+
+    val ridingState = coordinator.rideSession.value
+    assertTrue("Expected distance >= 100m, got ${ridingState.distanceMeters}", ridingState.distanceMeters >= 100L)
+    assertEquals(2, ridingState.routePoints.size)
+    assertTrue(ridingState.livePointsEarned >= 25L)
+
+    coordinator.pauseRide()
+    assertEquals(RideStatus.PAUSED, coordinator.rideSession.value.status)
+
+    coordinator.resumeRide()
+    assertEquals(RideStatus.RIDING, coordinator.rideSession.value.status)
+
+    val finished = coordinator.beginFinishRide()
+    assertTrue(finished != null && finished.distanceMeters >= 100L)
+    assertEquals(RideStatus.SAVING, coordinator.rideSession.value.status)
   }
 
   @Test

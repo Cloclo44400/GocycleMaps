@@ -1,6 +1,5 @@
 package com.example.ui.viewmodel
 
-import android.location.Location
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,13 +14,10 @@ import com.example.data.model.SportType
 import com.example.data.model.UserProfile
 import com.example.data.repository.SportDataRepository
 import com.example.location.PowerMode
-import com.example.location.PowerModePreferences
-import com.example.location.RideLocationTracker
+import com.example.location.RideSessionCoordinator
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -34,7 +30,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.osmdroid.util.GeoPoint
 
@@ -106,14 +101,12 @@ data class RouteEditorState(
 
 class VeloQuestViewModel(
     private val repository: SportDataRepository,
-    private val locationTracker: RideLocationTracker,
+    private val sessionCoordinator: RideSessionCoordinator,
     private val currentUserId: String,
     initialDisplayName: String,
-    private val powerModePreferences: PowerModePreferences? = null,
 ) : ViewModel() {
 
-    private val _fallbackPowerMode = MutableStateFlow(PowerMode.STANDARD)
-    val powerMode: StateFlow<PowerMode> = powerModePreferences?.powerMode ?: _fallbackPowerMode.asStateFlow()
+    val powerMode: StateFlow<PowerMode> = sessionCoordinator.powerMode
 
     val profileState: StateFlow<UiState<UserProfile>> = repository.observeUserProfile(currentUserId)
         .map<UserProfile?, UiState<UserProfile>> { profile ->
@@ -179,8 +172,7 @@ class VeloQuestViewModel(
             initialValue = UiState.Loading,
         )
 
-    private val _rideSession = MutableStateFlow(RideSessionState())
-    val rideSession: StateFlow<RideSessionState> = _rideSession.asStateFlow()
+    val rideSession: StateFlow<RideSessionState> = sessionCoordinator.rideSession
 
     private val _editorState = MutableStateFlow(RouteEditorState())
     val editorState: StateFlow<RouteEditorState> = _editorState.asStateFlow()
@@ -205,11 +197,6 @@ class VeloQuestViewModel(
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val events: SharedFlow<String> = _events.asSharedFlow()
 
-    private var timerJob: Job? = null
-    private var locationJob: Job? = null
-    private var lastAcceptedLocation: Location? = null
-    private var pendingResidualMeters: Double = 0.0
-
     init {
         viewModelScope.launch {
             try {
@@ -223,8 +210,7 @@ class VeloQuestViewModel(
     }
 
     fun selectSport(sportType: SportType) {
-        if (_rideSession.value.status != RideStatus.IDLE) return
-        _rideSession.update { it.copy(selectedSport = sportType) }
+        sessionCoordinator.selectSport(sportType)
     }
 
     fun selectLeaderboardCategory(category: LeaderboardCategory) {
@@ -232,11 +218,7 @@ class VeloQuestViewModel(
     }
 
     fun setPowerMode(mode: PowerMode) {
-        if (powerModePreferences != null) {
-            powerModePreferences.setPowerMode(mode)
-        } else {
-            _fallbackPowerMode.value = mode
-        }
+        sessionCoordinator.setPowerMode(mode)
         val msg = if (mode == PowerMode.ECO) {
             "Mode Éco activé (limitation de la batterie)."
         } else {
@@ -246,145 +228,35 @@ class VeloQuestViewModel(
     }
 
     fun onLocationPermissionGranted() {
-        viewModelScope.launch {
-            val lastLoc = locationTracker.getLastKnownLocation()
-            if (lastLoc != null && _rideSession.value.currentLocation == null) {
-                _rideSession.update {
-                    it.copy(currentLocation = GeoPoint(lastLoc.latitude, lastLoc.longitude))
-                }
-            }
-        }
-        startLocationUpdates()
+        sessionCoordinator.onPermissionGranted()
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private fun startLocationUpdates() {
-        if (locationJob?.isActive == true) return
-        locationJob = viewModelScope.launch {
-            powerMode
-                .flatMapLatest { mode -> locationTracker.locationUpdates(mode) }
-                .catch { e ->
-                    Log.w(TAG, "Location updates stopped: ${e.localizedMessage}")
-                }
-                .collect { location ->
-                    handleNewLocation(location)
-                }
-        }
-    }
-
-    private fun handleNewLocation(location: Location) {
-        val newGeoPoint = GeoPoint(location.latitude, location.longitude)
-        val currentState = _rideSession.value
-
-        if (currentState.status != RideStatus.RIDING) {
-            _rideSession.update { it.copy(currentLocation = newGeoPoint) }
-            return
-        }
-
-        if (location.hasAccuracy() && location.accuracy > MAX_ACCEPTABLE_ACCURACY_METERS) {
-            _rideSession.update { it.copy(currentLocation = newGeoPoint) }
-            return
-        }
-
-        val maxSpeed = currentState.selectedSport.maxSpeedKmh
-        val previous = lastAcceptedLocation
-        if (previous == null) {
-            lastAcceptedLocation = location
-            _rideSession.update {
-                it.copy(
-                    currentLocation = newGeoPoint,
-                    routePoints = it.routePoints + newGeoPoint,
-                    currentSpeedKmh = if (location.hasSpeed()) (location.speed * 3.6).coerceIn(0.0, maxSpeed) else 0.0,
-                )
-            }
-            return
-        }
-
-        val deltaMeters = previous.distanceTo(location).toDouble()
-        val deltaTimeSec = ((location.time - previous.time) / 1000.0).coerceAtLeast(0.5)
-        val impliedSpeedKmh = (deltaMeters / deltaTimeSec) * 3.6
-
-        if (deltaMeters < MIN_SEGMENT_METERS || impliedSpeedKmh > maxSpeed) {
-            _rideSession.update {
-                it.copy(
-                    currentLocation = newGeoPoint,
-                    currentSpeedKmh = if (location.hasSpeed()) (location.speed * 3.6).coerceIn(0.0, maxSpeed) else 0.0,
-                )
-            }
-            return
-        }
-
-        lastAcceptedLocation = location
-        pendingResidualMeters += deltaMeters
-        val wholeMetersAdded = pendingResidualMeters.toLong()
-        pendingResidualMeters -= wholeMetersAdded
-
-        val speedKmh = if (location.hasSpeed() && location.speed > 0.2f) {
-            (location.speed * 3.6).coerceIn(0.0, maxSpeed)
-        } else {
-            impliedSpeedKmh.coerceIn(0.0, maxSpeed)
-        }
-
-        _rideSession.update { state ->
-            state.copy(
-                currentLocation = newGeoPoint,
-                routePoints = state.routePoints + newGeoPoint,
-                distanceMeters = state.distanceMeters + wholeMetersAdded,
-                currentSpeedKmh = speedKmh,
-            )
-        }
+    fun onAppResumed() {
+        sessionCoordinator.onAppResumed()
     }
 
     fun startRide() {
-        lastAcceptedLocation = null
-        pendingResidualMeters = 0.0
-        val initialPoints = _rideSession.value.currentLocation?.let { listOf(it) } ?: emptyList()
-        _rideSession.update {
-            it.copy(
-                status = RideStatus.RIDING,
-                routePoints = initialPoints,
-                distanceMeters = 0L,
-                elapsedSeconds = 0L,
-                currentSpeedKmh = 0.0,
-                lastCompletedSummary = null,
-            )
-        }
-        startTimer()
-        startLocationUpdates()
+        sessionCoordinator.startRide()
     }
 
     fun pauseRide() {
-        if (_rideSession.value.status != RideStatus.RIDING) return
-        timerJob?.cancel()
-        lastAcceptedLocation = null
-        _rideSession.update { it.copy(status = RideStatus.PAUSED, currentSpeedKmh = 0.0) }
+        sessionCoordinator.pauseRide()
     }
 
     fun resumeRide() {
-        if (_rideSession.value.status != RideStatus.PAUSED) return
-        lastAcceptedLocation = null
-        _rideSession.update { it.copy(status = RideStatus.RIDING) }
-        startTimer()
+        sessionCoordinator.resumeRide()
     }
 
     fun finishRide(equippedTrailId: String) {
-        val state = _rideSession.value
-        if (state.status == RideStatus.IDLE || state.status == RideStatus.SAVING) return
-        timerJob?.cancel()
-        lastAcceptedLocation = null
+        val state = sessionCoordinator.beginFinishRide() ?: return
 
-        if (state.distanceMeters < MIN_RECORDABLE_DISTANCE_METERS) {
-            _rideSession.update {
-                RideSessionState(
-                    selectedSport = it.selectedSport,
-                    currentLocation = it.currentLocation,
-                )
-            }
-            _events.tryEmit("Parcourez au moins $MIN_RECORDABLE_DISTANCE_METERS m pour enregistrer votre sortie.")
+        if (state.distanceMeters < RideSessionCoordinator.MIN_RECORDABLE_DISTANCE_METERS) {
+            _events.tryEmit(
+                "Parcourez au moins ${RideSessionCoordinator.MIN_RECORDABLE_DISTANCE_METERS} m pour enregistrer votre sortie."
+            )
             return
         }
 
-        _rideSession.update { it.copy(status = RideStatus.SAVING) }
         viewModelScope.launch {
             try {
                 val avgSpeed = state.avgSpeedKmh
@@ -398,29 +270,25 @@ class VeloQuestViewModel(
                     startLabel = defaultLabel,
                     sportType = sport,
                 )
-                _rideSession.update { current ->
-                    RideSessionState(
-                        selectedSport = current.selectedSport,
-                        currentLocation = current.currentLocation,
-                        lastCompletedSummary = RideSummary(
-                            sportType = sport,
-                            distanceMeters = state.distanceMeters,
-                            durationSeconds = state.elapsedSeconds,
-                            pointsEarned = points,
-                            avgSpeedKmh = avgSpeed,
-                        ),
+                sessionCoordinator.markRideSaved(
+                    RideSummary(
+                        sportType = sport,
+                        distanceMeters = state.distanceMeters,
+                        durationSeconds = state.elapsedSeconds,
+                        pointsEarned = points,
+                        avgSpeedKmh = avgSpeed,
                     )
-                }
+                )
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                _rideSession.update { it.copy(status = RideStatus.PAUSED) }
+                sessionCoordinator.restorePausedAfterSaveError()
                 _events.tryEmit("Impossible d'enregistrer la sortie : ${e.localizedMessage}")
             }
         }
     }
 
     fun dismissSummary() {
-        _rideSession.update { it.copy(lastCompletedSummary = null) }
+        sessionCoordinator.dismissSummary()
     }
 
     fun updateDisplayName(newName: String) {
@@ -528,9 +396,7 @@ class VeloQuestViewModel(
         viewModelScope.launch {
             try {
                 repository.deletePlannedRoute(routeId)
-                if (_rideSession.value.activeGuideRoute?.id == routeId) {
-                    clearActiveGuideRoute()
-                }
+                sessionCoordinator.clearActiveGuideRouteIfMatches(routeId)
                 _events.tryEmit("Trajet supprimé.")
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -540,47 +406,21 @@ class VeloQuestViewModel(
     }
 
     fun followPlannedRoute(route: PlannedRoute) {
-        _rideSession.update { state ->
-            val updatedSport = if (state.status == RideStatus.IDLE) route.resolvedSportType() else state.selectedSport
-            state.copy(
-                selectedSport = updatedSport,
-                activeGuideRoute = route,
-            )
-        }
+        sessionCoordinator.followPlannedRoute(route)
         _events.tryEmit("Tracé « ${route.name} » affiché sur la carte Sport.")
     }
 
     fun clearActiveGuideRoute() {
-        _rideSession.update { it.copy(activeGuideRoute = null) }
-    }
-
-    private fun startTimer() {
-        timerJob?.cancel()
-        timerJob = viewModelScope.launch {
-            while (isActive) {
-                delay(1000L)
-                _rideSession.update { state ->
-                    if (state.status == RideStatus.RIDING) {
-                        state.copy(elapsedSeconds = state.elapsedSeconds + 1L)
-                    } else {
-                        state
-                    }
-                }
-            }
-        }
+        sessionCoordinator.clearActiveGuideRoute()
     }
 
     override fun onCleared() {
         super.onCleared()
-        timerJob?.cancel()
-        locationJob?.cancel()
+        sessionCoordinator.stopIdleUpdates()
     }
 
     private companion object {
         const val TAG = "GoCycleMapsVM"
         const val STOP_TIMEOUT_MILLIS = 5000L
-        const val MAX_ACCEPTABLE_ACCURACY_METERS = 40f
-        const val MIN_SEGMENT_METERS = 2.0
-        const val MIN_RECORDABLE_DISTANCE_METERS = 10L
     }
 }
