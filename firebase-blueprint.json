@@ -143,6 +143,10 @@
           "type": "string",
           "description": "Libellé de la sortie"
         },
+        "waypointsJson": {
+          "type": "string",
+          "description": "Tracé GPS enregistré au format JSON compact [[lat,lon],...]"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",

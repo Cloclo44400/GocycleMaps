@@ -262,6 +262,7 @@ class VeloQuestViewModel(
                 val avgSpeed = state.avgSpeedKmh
                 val sport = state.selectedSport
                 val defaultLabel = if (sport == SportType.RUNNING) "Course à pied" else "Balade à vélo"
+                val recordedWaypoints = state.routePoints.map { RoutePointDto(it.latitude, it.longitude) }
                 val points = repository.recordCompletedRide(
                     distanceMeters = state.distanceMeters,
                     durationSeconds = state.elapsedSeconds,
@@ -269,6 +270,7 @@ class VeloQuestViewModel(
                     trailCosmeticId = equippedTrailId,
                     startLabel = defaultLabel,
                     sportType = sport,
+                    routeWaypoints = recordedWaypoints,
                 )
                 sessionCoordinator.markRideSaved(
                     RideSummary(
@@ -408,6 +410,27 @@ class VeloQuestViewModel(
     fun followPlannedRoute(route: PlannedRoute) {
         sessionCoordinator.followPlannedRoute(route)
         _events.tryEmit("Tracé « ${route.name} » affiché sur la carte Sport.")
+    }
+
+    fun followRecordedRide(ride: BikeRide) {
+        val waypoints = ride.decodeWaypoints()
+        if (waypoints.size < 2) {
+            _events.tryEmit("Aucun tracé GPS enregistré pour cette sortie.")
+            return
+        }
+        val guide = PlannedRoute(
+            id = "history_${ride.id}",
+            userId = ride.userId,
+            name = ride.startLabel,
+            sportType = ride.sportType,
+            distanceMeters = ride.distanceMeters,
+            estimatedPoints = ride.pointsEarned,
+            waypointCount = waypoints.size.toLong(),
+            waypointsJson = ride.waypointsJson,
+            createdAt = ride.createdAt,
+        )
+        sessionCoordinator.followPlannedRoute(guide)
+        _events.tryEmit("Parcours « ${ride.startLabel} » affiché sur la carte Sport.")
     }
 
     fun clearActiveGuideRoute() {

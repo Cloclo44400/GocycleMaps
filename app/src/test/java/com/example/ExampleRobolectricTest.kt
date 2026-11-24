@@ -104,8 +104,17 @@ class ExampleRobolectricTest {
       trailCosmeticId = "trail_emerald",
       startLabel = "Course à pied",
       sportType = SportType.RUNNING,
+      routeWaypoints = listOf(
+        RoutePointDto(48.8566, 2.3522),
+        RoutePointDto(48.8580, 2.3530),
+      ),
     )
     assertEquals(125L, runningPts)
+
+    val savedRides = repo.observeRides(LocalGuestRepository.GUEST_USER_ID).first()
+    assertEquals(1, savedRides.size)
+    assertTrue(savedRides.first().hasRecordedRoute())
+    assertEquals(2, savedRides.first().decodeWaypoints().size)
 
     val cyclingPts = repo.recordCompletedRide(
       distanceMeters = 2000L,

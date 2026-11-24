@@ -95,6 +95,7 @@ service cloud.firestore {
              (data.avgSpeedKmh is int || data.avgSpeedKmh is float) && data.avgSpeedKmh >= 0 && data.avgSpeedKmh <= 150 &&
              data.trailCosmeticId is string && data.trailCosmeticId.size() >= 1 && data.trailCosmeticId.size() <= 50 &&
              data.startLabel is string && data.startLabel.size() >= 1 && data.startLabel.size() <= 100 &&
+             (!('waypointsJson' in data) || (data.waypointsJson is string && data.waypointsJson.size() >= 2 && data.waypointsJson.size() <= 100000)) &&
              data.createdAt is timestamp && data.createdAt <= request.time;
     }
 
@@ -201,7 +202,7 @@ service cloud.firestore {
                          ]) &&
                          incoming().keys().hasOnly([
                            'userId', 'sportType', 'distanceMeters', 'durationSeconds', 'pointsEarned',
-                           'avgSpeedKmh', 'trailCosmeticId', 'startLabel', 'createdAt'
+                           'avgSpeedKmh', 'trailCosmeticId', 'startLabel', 'waypointsJson', 'createdAt'
                          ]) &&
                          (
                            (incoming().sportType == 'cycling' && incoming().pointsEarned <= (incoming().distanceMeters / 100) + 1) ||

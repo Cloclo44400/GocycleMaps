@@ -88,6 +88,7 @@ class LocalGuestRepository(context: Context) : SportDataRepository {
         trailCosmeticId: String,
         startLabel: String,
         sportType: SportType,
+        routeWaypoints: List<RoutePointDto>,
     ): Long {
         require(distanceMeters > 0L) { "La distance doit être supérieure à 0 m." }
         val pointsEarned = CyclingPointsCalculator.calculatePointsForDistanceMeters(distanceMeters, sportType)
@@ -132,6 +133,7 @@ class LocalGuestRepository(context: Context) : SportDataRepository {
         saveProfile(updatedProfile)
 
         val defaultLabel = if (sportType == SportType.RUNNING) "Course à pied" else "Balade à vélo"
+        val compactedWaypoints = RouteGeometryHelper.downsampleWaypoints(routeWaypoints)
         val newRide = BikeRide(
             id = UUID.randomUUID().toString(),
             userId = GUEST_USER_ID,
@@ -142,6 +144,7 @@ class LocalGuestRepository(context: Context) : SportDataRepository {
             avgSpeedKmh = avgSpeedKmh.coerceIn(0.0, 150.0),
             trailCosmeticId = trailCosmeticId,
             startLabel = startLabel.trim().take(100).ifEmpty { defaultLabel },
+            waypointsJson = RouteGeometryHelper.encodeWaypointsJson(compactedWaypoints),
             createdAt = Timestamp.now(),
         )
         val updatedRides = listOf(newRide) + ridesFlow.value
@@ -273,6 +276,7 @@ class LocalGuestRepository(context: Context) : SportDataRepository {
                             avgSpeedKmh = obj.optDouble("avgSpeedKmh", 0.0),
                             trailCosmeticId = obj.optString("trailCosmeticId", CosmeticDefaults.TRAIL_EMERALD),
                             startLabel = obj.optString("startLabel", "Balade à vélo"),
+                            waypointsJson = obj.optString("waypointsJson", "[]"),
                             createdAt = Timestamp(Date(createdMillis)),
                         )
                     )
@@ -294,6 +298,7 @@ class LocalGuestRepository(context: Context) : SportDataRepository {
                     put("avgSpeedKmh", ride.avgSpeedKmh)
                     put("trailCosmeticId", ride.trailCosmeticId)
                     put("startLabel", ride.startLabel)
+                    put("waypointsJson", ride.waypointsJson)
                     put("createdAtMillis", ride.createdAt?.toDate()?.time ?: System.currentTimeMillis())
                 }
             )

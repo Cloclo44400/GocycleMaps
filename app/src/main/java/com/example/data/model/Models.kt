@@ -85,9 +85,14 @@ data class BikeRide(
     val avgSpeedKmh: Double = 0.0,
     val trailCosmeticId: String = CosmeticDefaults.TRAIL_EMERALD,
     val startLabel: String = "Balade à vélo",
+    val waypointsJson: String = "[]",
     @ServerTimestamp val createdAt: Timestamp? = null,
 ) {
     fun resolvedSportType(): SportType = SportType.fromId(sportType)
+
+    fun decodeWaypoints(): List<RoutePointDto> = RouteGeometryHelper.decodeWaypointsJson(waypointsJson)
+
+    fun hasRecordedRoute(): Boolean = decodeWaypoints().size >= 2
 }
 
 @IgnoreExtraProperties
@@ -218,6 +223,28 @@ object RouteGeometryHelper {
     private val PAIR_REGEX = Regex(
         """\[\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*,\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*]"""
     )
+
+    fun downsampleWaypoints(
+        points: List<RoutePointDto>,
+        maxPoints: Int = 400,
+    ): List<RoutePointDto> {
+        if (points.isEmpty()) return emptyList()
+        val rounded = points.map {
+            RoutePointDto(
+                latitude = kotlin.math.round(it.latitude * 100_000.0) / 100_000.0,
+                longitude = kotlin.math.round(it.longitude * 100_000.0) / 100_000.0,
+            )
+        }
+        if (rounded.size <= maxPoints || maxPoints < 2) return rounded
+        val result = ArrayList<RoutePointDto>(maxPoints)
+        val lastIndex = rounded.lastIndex
+        for (i in 0 until maxPoints) {
+            val sourceIndex = ((i.toDouble() / (maxPoints - 1)) * lastIndex).roundToLong().toInt()
+                .coerceIn(0, lastIndex)
+            result.add(rounded[sourceIndex])
+        }
+        return result
+    }
 
     fun encodeWaypointsJson(points: List<RoutePointDto>): String =
         points.joinToString(prefix = "[", postfix = "]", separator = ",") {

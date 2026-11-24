@@ -28,6 +28,7 @@ interface SportDataRepository {
         trailCosmeticId: String,
         startLabel: String = "Balade à vélo",
         sportType: SportType = SportType.CYCLING,
+        routeWaypoints: List<RoutePointDto> = emptyList(),
     ): Long
 
     suspend fun updateDisplayName(newDisplayName: String)

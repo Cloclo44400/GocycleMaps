@@ -229,6 +229,7 @@ class CyclingRepository(
         trailCosmeticId: String,
         startLabel: String,
         sportType: SportType,
+        routeWaypoints: List<RoutePointDto>,
     ): Long {
         val uid = requireUserId()
         require(distanceMeters > 0L) { "La distance doit être supérieure à 0 m." }
@@ -304,6 +305,7 @@ class CyclingRepository(
                 )
 
                 val defaultLabel = if (sportType == SportType.RUNNING) "Course à pied" else "Balade à vélo"
+                val compactedWaypoints = RouteGeometryHelper.downsampleWaypoints(routeWaypoints)
                 val ridePayload = mapOf(
                     "userId" to uid,
                     "sportType" to sportType.id,
@@ -313,6 +315,7 @@ class CyclingRepository(
                     "avgSpeedKmh" to avgSpeedKmh.coerceIn(0.0, 150.0),
                     "trailCosmeticId" to trailCosmeticId,
                     "startLabel" to startLabel.trim().take(100).ifEmpty { defaultLabel },
+                    "waypointsJson" to RouteGeometryHelper.encodeWaypointsJson(compactedWaypoints),
                     "createdAt" to FieldValue.serverTimestamp(),
                 )
                 transaction.set(rideRef, ridePayload)

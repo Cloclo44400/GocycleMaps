@@ -446,6 +446,10 @@ fun MainFeatureScreen(
                                 ridesState = ridesState,
                                 onUpdateDisplayName = viewModel::updateDisplayName,
                                 onDeleteRide = viewModel::deleteRide,
+                                onFollowRecordedRide = { ride ->
+                                    viewModel.followRecordedRide(ride)
+                                    navigateToTab(ROUTE_RIDE)
+                                },
                                 onSignOut = {
                                     if (isGuestMode) {
                                         onExitGuestMode()

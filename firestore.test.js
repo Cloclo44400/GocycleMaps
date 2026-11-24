@@ -196,7 +196,7 @@ test("Authenticated user can record 2.5km cycling (25 pts) and 400m running (100
   cyclingBatch.set(lbRef, validLeaderboardEntry(ALICE_UID, "Alice Sportive", 25, 2500, 1, 0, 0, 0));
   await assertSucceeds(cyclingBatch.commit());
 
-  // 2. Running 400m => 4 * 25 = 100 pts
+  // 2. Running 400m => 4 * 25 = 100 pts with recorded GPS waypoints
   await assertSucceeds(
     profileRef.collection("rides").doc("ride_running_1").set({
       userId: ALICE_UID,
@@ -207,6 +207,22 @@ test("Authenticated user can record 2.5km cycling (25 pts) and 400m running (100
       avgSpeedKmh: 12.0,
       trailCosmeticId: "trail_coral",
       startLabel: "Course à pied",
+      waypointsJson: "[[47.21,-1.55],[47.2136,-1.55]]",
+      createdAt: nowTimestamp(),
+    })
+  );
+
+  await assertFails(
+    profileRef.collection("rides").doc("ride_running_invalid_wp").set({
+      userId: ALICE_UID,
+      sportType: "running",
+      distanceMeters: 400,
+      durationSeconds: 120,
+      pointsEarned: 100,
+      avgSpeedKmh: 12.0,
+      trailCosmeticId: "trail_coral",
+      startLabel: "Course à pied",
+      waypointsJson: "",
       createdAt: nowTimestamp(),
     })
   );

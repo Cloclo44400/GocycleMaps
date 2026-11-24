@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.data.model.BikeRide
 import com.example.data.model.CosmeticCatalog
 import com.example.data.model.CyclingPointsCalculator
 import com.example.data.model.RouteGeometryHelper
@@ -68,6 +69,25 @@ class ExampleUnitTest {
         assertEquals(2, decoded.size)
         assertEquals(48.8566, decoded[0].latitude, 0.0001)
         assertEquals(2.3522, decoded[1].longitude, 0.0001)
+    }
+
+    @Test
+    fun bikeRide_downsamplesAndDecodesRecordedWaypoints() {
+        val densePoints = (0 until 1000).map { i ->
+            RoutePointDto(48.85 + i * 0.0001, 2.35 + i * 0.0001)
+        }
+        val compacted = RouteGeometryHelper.downsampleWaypoints(densePoints, maxPoints = 400)
+        assertEquals(400, compacted.size)
+        assertEquals(48.85, compacted.first().latitude, 0.0001)
+        assertEquals(densePoints.last().latitude, compacted.last().latitude, 0.0001)
+
+        val ride = BikeRide(
+            id = "ride_1",
+            waypointsJson = RouteGeometryHelper.encodeWaypointsJson(compacted),
+        )
+        assertTrue(ride.hasRecordedRoute())
+        assertEquals(400, ride.decodeWaypoints().size)
+        assertFalse(BikeRide(id = "old_ride").hasRecordedRoute())
     }
 
     @Test
